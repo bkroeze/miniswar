@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Miniswar</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script defer src="/static/app.js"></script>
+  <script defer src="/static/alpine.min.js"></script>
+</head>
+<body x-data="miniswar" x-init="createGame()">
+  <header class="topbar">
+    <div>
+      <h1>Miniswar</h1>
+      <p x-text="statusLine()"></p>
+    </div>
+    <button type="button" @click="createGame()">New Game</button>
+  </header>
+
+  <main class="shell">
+    <section class="setup">
+      <h2>Setup</h2>
+      <div class="setup-grid">
+        <label>Player 1 base
+          <select x-model="setup.player1.base">
+            <option value="25x25">25x25</option>
+            <option value="25x50">25x50</option>
+            <option value="50x50">50x50</option>
+            <option value="50x100">50x100</option>
+          </select>
+        </label>
+        <label>Player 1 minis
+          <input type="number" min="1" max="20" x-model.number="setup.player1.count">
+        </label>
+        <label>Player 2 base
+          <select x-model="setup.player2.base">
+            <option value="25x25">25x25</option>
+            <option value="25x50">25x50</option>
+            <option value="50x50">50x50</option>
+            <option value="50x100">50x100</option>
+          </select>
+        </label>
+        <label>Player 2 minis
+          <input type="number" min="1" max="20" x-model.number="setup.player2.count">
+        </label>
+      </div>
+    </section>
+
+    <section class="arena-panel">
+      <svg class="arena" viewBox="0 0 760 520" role="img" aria-label="Miniswar arena">
+        <defs>
+          <pattern id="grid" width="25" height="25" patternUnits="userSpaceOnUse">
+            <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#d7d0c2" stroke-width="1"/>
+          </pattern>
+        </defs>
+        <rect width="760" height="520" fill="#f4efe4"></rect>
+        <rect width="760" height="520" fill="url(#grid)"></rect>
+        <g x-ref="units"></g>
+      </svg>
+    </section>
+
+    <section class="controls">
+      <h2>Activation</h2>
+      <div class="control-row">
+        <button type="button" @click="activate()" :disabled="!canActivate()">Activate</button>
+        <span x-text="selectedUnitLabel()"></span>
+      </div>
+
+      <h2>Actions</h2>
+      <p class="target-line" x-text="pivotAxisLabel()"></p>
+      <div class="action-grid">
+        <label>Distance
+          <input type="number" min="1" x-model.number="move.distanceMm">
+        </label>
+        <label>Direction
+          <select x-model="move.direction">
+            <option value="forward">forward</option>
+            <option value="backward">backward</option>
+          </select>
+        </label>
+        <button type="button" @click="takeAction('move')" :disabled="!canAct()">Move</button>
+        <label>Pivot Deg
+          <input type="number" min="0" max="359" x-model.number="pivot.facingDeg">
+        </label>
+        <button type="button" @click="takeAction('pivot')" :disabled="!canAct()">Pivot</button>
+        <button type="button" @click="takeAction('about_face')" :disabled="!canAct()">About Face</button>
+      </div>
+
+      <h2>Feedback</h2>
+      <ol class="messages">
+        <template x-for="message in messages" :key="message">
+          <li x-text="message"></li>
+        </template>
+      </ol>
+
+      <h2>History</h2>
+      <ol class="history">
+        <template x-for="action in game?.actionHistory || []" :key="action.index">
+          <li>
+            <button type="button" @click="rewind(action.index)">rewind</button>
+            <span x-text="`${action.index}: ${action.type} ${action.unitId || ''}`"></span>
+          </li>
+        </template>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>

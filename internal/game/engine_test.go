@@ -1,0 +1,241 @@
+package game
+
+import (
+	"math"
+	"testing"
+)
+
+func TestNewGameLayoutsAndOfficer(t *testing.T) {
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 7},
+		Player2: UnitSetup{BaseWidthMM: 50, BaseDepthMM: 50, Count: 3},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(g.Units[0].Minis) != 7 {
+		t.Fatalf("got %d minis", len(g.Units[0].Minis))
+	}
+	officers := 0
+	for _, mini := range g.Units[0].Minis {
+		if mini.IsOfficer {
+			officers++
+			if mini.Rank != 0 {
+				t.Fatalf("officer not in front rank: %+v", mini)
+			}
+		}
+	}
+	if officers != 1 {
+		t.Fatalf("got %d officers", officers)
+	}
+	if g.Units[0].Minis[0].Key != "p1-u1-m01" {
+		t.Fatalf("unstable key: %s", g.Units[0].Minis[0].Key)
+	}
+}
+
+func mathRound(v float64) float64 {
+	return math.Round(v*1000000) / 1000000
+}
+
+func TestOfficerExistsForSmallUnits(t *testing.T) {
+	engine := NewEngine(1)
+	for _, count := range []int{1, 2} {
+		g, err := engine.NewGame(Setup{
+			Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: count},
+			Player2: UnitSetup{BaseWidthMM: 50, BaseDepthMM: 100, Count: 1},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		officers := 0
+		for _, mini := range g.Units[0].Minis {
+			if mini.IsOfficer {
+				officers++
+			}
+		}
+		if officers != 1 {
+			t.Fatalf("count %d got %d officers", count, officers)
+		}
+	}
+}
+
+func TestInvalidBaseAndCount(t *testing.T) {
+	engine := NewEngine(1)
+	_, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 50, BaseDepthMM: 100, Count: 2},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 1},
+	})
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+}
+
+func TestActivationAndMove(t *testing.T) {
+	engine := NewEngine(3)
+	g, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit := g.Units[g.ActivePlayer-1]
+	_, _, err = engine.Activate(g, ActivateRequest{PlayerID: g.ActivePlayer, UnitID: unit.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeX := unit.X
+	beforeY := unit.Y
+	_, err = engine.ApplyAction(g, ActionRequest{PlayerID: unit.PlayerID, UnitID: unit.ID, Type: ActionMove, Direction: "forward", DistanceMM: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, _ := findUnit(g, unit.ID)
+	if updated.X != beforeX {
+		t.Fatalf("facing 0 should not change x: before %v after %v", beforeX, updated.X)
+	}
+	if updated.Y != beforeY-20 {
+		t.Fatalf("facing 0 should move north/up: before %v after %v", beforeY, updated.Y)
+	}
+}
+
+func TestCompassFacingMovement(t *testing.T) {
+	cases := []struct {
+		name   string
+		facing int
+		wantX  float64
+		wantY  float64
+	}{
+		{name: "north", facing: 0, wantX: 100, wantY: 80},
+		{name: "east", facing: 90, wantX: 120, wantY: 100},
+		{name: "south", facing: 180, wantX: 100, wantY: 120},
+		{name: "west", facing: 270, wantX: 80, wantY: 100},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			unit := Unit{X: 100, Y: 100, FacingDeg: tc.facing, MovementLimitMM: MovementLimitMM}
+			act := &Activation{}
+			err := applyMove(&unit, act, ActionRequest{Type: ActionMove, Direction: "forward", DistanceMM: 20})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mathRound(unit.X) != tc.wantX || mathRound(unit.Y) != tc.wantY {
+				t.Fatalf("got (%v,%v), want (%v,%v)", unit.X, unit.Y, tc.wantX, tc.wantY)
+			}
+		})
+	}
+}
+
+func TestSecondMoveLimit(t *testing.T) {
+	engine := NewEngine(9)
+	g, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit := g.Units[g.ActivePlayer-1]
+	g.CurrentActivation = &Activation{UnitID: unit.ID, PlayerID: unit.PlayerID, Success: true, ActionsRemaining: 2}
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: unit.PlayerID, UnitID: unit.ID, Type: ActionMove, Direction: "forward", DistanceMM: 80}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: unit.PlayerID, UnitID: unit.ID, Type: ActionMove, Direction: "forward", DistanceMM: 80}); err == nil {
+		t.Fatal("expected second move distance error")
+	}
+}
+
+func TestPivotDefaultsToOfficerAsFixedAxis(t *testing.T) {
+	engine := NewEngine(5)
+	g, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 7},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit := &g.Units[0]
+	officer, err := pivotAnchor(unit, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeX, beforeY := miniWorldCenter(*unit, officer, unit.FacingDeg)
+	g.CurrentActivation = &Activation{UnitID: unit.ID, PlayerID: unit.PlayerID, Success: true, ActionsRemaining: 1}
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: unit.PlayerID, UnitID: unit.ID, Type: ActionPivot, FacingDeg: 90}); err != nil {
+		t.Fatal(err)
+	}
+	afterX, afterY := miniWorldCenter(*unit, officer, unit.FacingDeg)
+	if mathRound(afterX) != mathRound(beforeX) || mathRound(afterY) != mathRound(beforeY) {
+		t.Fatalf("officer moved during pivot: before (%v,%v), after (%v,%v)", beforeX, beforeY, afterX, afterY)
+	}
+	if unit.FacingDeg != 90 {
+		t.Fatalf("got facing %d", unit.FacingDeg)
+	}
+}
+
+func TestPivotUsesSelectedAnchorAsFixedAxis(t *testing.T) {
+	engine := NewEngine(6)
+	g, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 7},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit := &g.Units[0]
+	anchor := unit.Minis[0]
+	beforeX, beforeY := miniWorldCenter(*unit, anchor, unit.FacingDeg)
+	g.CurrentActivation = &Activation{UnitID: unit.ID, PlayerID: unit.PlayerID, Success: true, ActionsRemaining: 1}
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: unit.PlayerID, UnitID: unit.ID, Type: ActionPivot, FacingDeg: 90, AnchorKey: anchor.Key}); err != nil {
+		t.Fatal(err)
+	}
+	afterX, afterY := miniWorldCenter(*unit, anchor, unit.FacingDeg)
+	if mathRound(afterX) != mathRound(beforeX) || mathRound(afterY) != mathRound(beforeY) {
+		t.Fatalf("selected anchor moved during pivot: before (%v,%v), after (%v,%v)", beforeX, beforeY, afterX, afterY)
+	}
+}
+
+func TestLegalActionsDoesNotExposeWheel(t *testing.T) {
+	g := &Game{CurrentActivation: &Activation{UnitID: "u1"}}
+	for _, action := range LegalActions(g) {
+		if action == "wheel" {
+			t.Fatal("wheel should not be a separate legal action")
+		}
+	}
+}
+
+func TestAboutFaceKeepsOneOfficerAndNoOverlaps(t *testing.T) {
+	engine := NewEngine(4)
+	g, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 7},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit := g.Units[g.ActivePlayer-1]
+	g.CurrentActivation = &Activation{UnitID: unit.ID, PlayerID: unit.PlayerID, Success: true, ActionsRemaining: 1}
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: unit.PlayerID, UnitID: unit.ID, Type: ActionAboutFace}); err != nil {
+		t.Fatal(err)
+	}
+	updated, _ := findUnit(g, unit.ID)
+	officers := 0
+	positions := map[[2]float64]bool{}
+	for _, mini := range updated.Minis {
+		if mini.IsOfficer {
+			officers++
+			if mini.Rank != 0 {
+				t.Fatalf("officer moved out of front rank: %+v", mini)
+			}
+		}
+		key := [2]float64{mini.RelX, mini.RelY}
+		if positions[key] {
+			t.Fatalf("overlapping mini at %+v", key)
+		}
+		positions[key] = true
+	}
+	if officers != 1 {
+		t.Fatalf("got %d officers", officers)
+	}
+}

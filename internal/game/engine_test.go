@@ -80,7 +80,7 @@ func TestActivationAndMove(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	unit := g.Units[g.ActivePlayer-1]
+	unit := firstUnitForPlayer(g, g.ActivePlayer)
 	_, _, err = engine.Activate(g, ActivateRequest{PlayerID: g.ActivePlayer, UnitID: unit.ID})
 	if err != nil {
 		t.Fatal(err)
@@ -136,7 +136,7 @@ func TestSecondMoveLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	unit := g.Units[g.ActivePlayer-1]
+	unit := firstUnitForPlayer(g, g.ActivePlayer)
 	g.CurrentActivation = &Activation{UnitID: unit.ID, PlayerID: unit.PlayerID, Success: true, ActionsRemaining: 2}
 	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: unit.PlayerID, UnitID: unit.ID, Type: ActionMove, Direction: "forward", DistanceMM: 80}); err != nil {
 		t.Fatal(err)
@@ -205,6 +205,84 @@ func TestLegalActionsDoesNotExposeWheel(t *testing.T) {
 	}
 }
 
+func TestNewGameSupportsMultipleUnitsPerPlayer(t *testing.T) {
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{
+		Player1Units: []UnitSetup{
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+			{BaseWidthMM: 50, BaseDepthMM: 50, Count: 1},
+		},
+		Player2Units: []UnitSetup{
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+			{BaseWidthMM: 25, BaseDepthMM: 50, Count: 3},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(g.Units) != 4 {
+		t.Fatalf("got %d units", len(g.Units))
+	}
+	if g.Units[0].ID != "u1" || g.Units[1].ID != "p1-u2" || g.Units[2].ID != "u2" || g.Units[3].ID != "p2-u2" {
+		t.Fatalf("unexpected unit ids: %+v", []string{g.Units[0].ID, g.Units[1].ID, g.Units[2].ID, g.Units[3].ID})
+	}
+}
+
+func TestUnevenUnitCountsFinishRemainingActivationsBeforeNewRound(t *testing.T) {
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{
+		Player1Units: []UnitSetup{
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		},
+		Player2Units: []UnitSetup{
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.ActivePlayer = 1
+
+	finishActivation(t, engine, g, "u1", 1)
+	if g.ActivePlayer != 2 || g.Round != 1 {
+		t.Fatalf("after p1 first activation got player %d round %d", g.ActivePlayer, g.Round)
+	}
+	finishActivation(t, engine, g, "u2", 2)
+	if g.ActivePlayer != 1 || g.Round != 1 {
+		t.Fatalf("player 1 should finish extra units, got player %d round %d", g.ActivePlayer, g.Round)
+	}
+	finishActivation(t, engine, g, "p1-u2", 1)
+	if g.Round != 2 || g.ActivePlayer != g.FirstPlayer {
+		t.Fatalf("round should reset after all units activate, got player %d round %d first %d", g.ActivePlayer, g.Round, g.FirstPlayer)
+	}
+}
+
+func TestCannotActivateAlreadyActivatedUnitWhenMultipleChoicesExist(t *testing.T) {
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{
+		Player1Units: []UnitSetup{
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		},
+		Player2Units: []UnitSetup{
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.ActivePlayer = 1
+	finishActivation(t, engine, g, "u1", 1)
+	g.ActivePlayer = 1
+	if _, _, err := engine.Activate(g, ActivateRequest{PlayerID: 1, UnitID: "u1"}); err == nil {
+		t.Fatal("expected already activated error")
+	}
+	if _, _, err := engine.Activate(g, ActivateRequest{PlayerID: 1, UnitID: "p1-u2"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAboutFaceSwapsOfficerWithLastFullRankAndKeepsPartialRankBack(t *testing.T) {
 	engine := NewEngine(4)
 	g, err := engine.NewGame(Setup{
@@ -269,5 +347,30 @@ func TestAboutFaceSwapsOfficerWithLastFullRankAndKeepsPartialRankBack(t *testing
 	}
 	if updated.FacingDeg != 180 {
 		t.Fatalf("got facing %d", updated.FacingDeg)
+	}
+}
+
+func firstUnitForPlayer(g *Game, playerID int) Unit {
+	for _, unit := range g.Units {
+		if unit.PlayerID == playerID {
+			return unit
+		}
+	}
+	return Unit{}
+}
+
+func finishActivation(t *testing.T, engine *Engine, g *Game, unitID string, playerID int) {
+	t.Helper()
+	if _, _, err := engine.Activate(g, ActivateRequest{PlayerID: playerID, UnitID: unitID}); err != nil {
+		t.Fatal(err)
+	}
+	unit, ok := findUnit(g, unitID)
+	if !ok {
+		t.Fatalf("missing unit %s", unitID)
+	}
+	for g.CurrentActivation != nil {
+		if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: playerID, UnitID: unit.ID, Type: ActionPivot, FacingDeg: unit.FacingDeg}); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

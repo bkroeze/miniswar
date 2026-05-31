@@ -19,8 +19,10 @@ type BaseSize struct {
 }
 
 type Setup struct {
-	Player1 UnitSetup `json:"player1"`
-	Player2 UnitSetup `json:"player2"`
+	Player1      UnitSetup   `json:"player1"`
+	Player2      UnitSetup   `json:"player2"`
+	Player1Units []UnitSetup `json:"player1Units,omitempty"`
+	Player2Units []UnitSetup `json:"player2Units,omitempty"`
 }
 
 type UnitSetup struct {

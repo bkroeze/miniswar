@@ -5,8 +5,8 @@ function createMiniswarApp() {
     selectedMini: "",
     messages: [],
     setup: {
-      player1: { base: "25x25", count: 12 },
-      player2: { base: "25x25", count: 10 },
+      player1: { base: "25x25", count: 12, units: [{ base: "25x25", count: 12 }] },
+      player2: { base: "25x25", count: 10, units: [{ base: "25x25", count: 10 }] },
     },
     move: { direction: "forward", distanceMm: 50 },
     pivot: { facingDeg: 0 },
@@ -17,9 +17,19 @@ function createMiniswarApp() {
         return { baseWidthMm, baseDepthMm };
       };
       return {
-        player1: { ...parseBase(this.setup.player1.base), count: this.setup.player1.count },
-        player2: { ...parseBase(this.setup.player2.base), count: this.setup.player2.count },
+        player1Units: this.setup.player1.units.map((unit) => ({ ...parseBase(unit.base), count: unit.count })),
+        player2Units: this.setup.player2.units.map((unit) => ({ ...parseBase(unit.base), count: unit.count })),
       };
+    },
+
+    addSetupUnit(playerId) {
+      const player = playerId === 1 ? this.setup.player1 : this.setup.player2;
+      player.units.push({ base: player.base, count: player.count });
+    },
+
+    removeSetupUnit(playerId, index) {
+      const units = playerId === 1 ? this.setup.player1.units : this.setup.player2.units;
+      if (units.length > 1) units.splice(index, 1);
     },
 
     async createGame() {
@@ -34,7 +44,7 @@ function createMiniswarApp() {
     },
 
     async activate() {
-      const unit = this.activePlayerUnit();
+      const unit = this.selectedActivatableUnit();
       if (!unit) return;
       const response = await this.api(`/api/games/${this.game.id}/activate`, {
         method: "POST",
@@ -85,13 +95,29 @@ function createMiniswarApp() {
       return this.game?.units?.find((unit) => unit.playerId === this.game.activePlayer);
     },
 
+    selectedActivatableUnit() {
+      const selected = this.game?.units?.find((unit) => unit.id === this.selectedUnit);
+      if (selected && selected.playerId === this.game.activePlayer && !this.unitActivatedThisRound(selected.id)) {
+        return selected;
+      }
+      return this.activatableUnits()[0];
+    },
+
+    activatableUnits() {
+      return (this.game?.units || []).filter((unit) => unit.playerId === this.game.activePlayer && !this.unitActivatedThisRound(unit.id));
+    },
+
+    unitActivatedThisRound(unitId) {
+      return Boolean(this.game?.actionHistory?.some((action) => action.round === this.game.round && action.type === "activate" && action.unitId === unitId));
+    },
+
     currentActivationUnit() {
       const id = this.game?.currentActivation?.unitId;
       return this.game?.units?.find((unit) => unit.id === id);
     },
 
     canActivate() {
-      return this.game && !this.game.currentActivation;
+      return this.game && !this.game.currentActivation && Boolean(this.selectedActivatableUnit());
     },
 
     canAct() {
@@ -100,8 +126,37 @@ function createMiniswarApp() {
 
     selectedUnitLabel() {
       if (!this.game) return "";
-      const unit = this.currentActivationUnit() || this.activePlayerUnit();
+      const unit = this.currentActivationUnit() || this.selectedActivatableUnit();
       return unit ? `${unit.name} (${unit.id})` : "No unit";
+    },
+
+    async selectUnit(unit) {
+      if (!this.game) return;
+      if (this.game.currentActivation) {
+        if (this.game.currentActivation.unitId === unit.id) {
+          this.selectedUnit = unit.id;
+        }
+        await this.renderArenaSoon();
+        return;
+      }
+      if (unit.playerId === this.game.activePlayer && !this.unitActivatedThisRound(unit.id)) {
+        this.selectedUnit = unit.id;
+        this.selectedMini = "";
+      }
+      await this.renderArenaSoon();
+    },
+
+    async selectMini(unit, mini) {
+      if (!this.game) return;
+      if (!this.game.currentActivation) {
+        await this.selectUnit(unit);
+        return;
+      }
+      if (this.game.currentActivation.unitId === unit.id) {
+        this.selectedUnit = unit.id;
+        this.selectedMini = mini.key;
+      }
+      await this.renderArenaSoon();
     },
 
     pivotAxisKey() {
@@ -133,8 +188,10 @@ function createMiniswarApp() {
 
     async setGame(game, options = {}) {
       this.game = game;
-      if (options.resetSelection || !this.selectedUnit) {
-        this.selectedUnit = this.activePlayerUnit()?.id || "";
+      const selectedStillValid = this.game.units.some((unit) => unit.id === this.selectedUnit);
+      const selectedCanActivate = this.selectedUnit && this.activatableUnits().some((unit) => unit.id === this.selectedUnit);
+      if (options.resetSelection || !selectedStillValid || (!this.currentActivationUnit() && !selectedCanActivate)) {
+        this.selectedUnit = this.currentActivationUnit()?.id || this.activatableUnits()[0]?.id || this.activePlayerUnit()?.id || "";
       }
       if (options.resetSelection || options.resetPivotAxis || !this.currentActivationUnit()) {
         this.selectedMini = "";
@@ -155,11 +212,12 @@ function createMiniswarApp() {
       const ns = "http://www.w3.org/2000/svg";
       for (const unit of this.game?.units || []) {
         const isActiveUnit = this.game?.currentActivation?.unitId === unit.id;
+        const isSelectedForActivation = !this.game?.currentActivation && unit.id === this.selectedUnit && unit.playerId === this.game.activePlayer && !this.unitActivatedThisRound(unit.id);
         const pivotAxis = isActiveUnit ? this.pivotAxisKey() : "";
         const group = document.createElementNS(ns, "g");
         group.setAttribute("transform", `translate(${unit.x} ${unit.y}) rotate(${unit.facingDeg})`);
         group.addEventListener("click", () => {
-          this.selectedUnit = unit.id;
+          void this.selectUnit(unit);
         });
 
         for (const mini of unit.minis) {
@@ -167,10 +225,7 @@ function createMiniswarApp() {
           miniGroup.setAttribute("transform", `translate(${mini.relX} ${mini.relY})`);
           miniGroup.addEventListener("click", (event) => {
             event.stopPropagation();
-            this.selectedUnit = unit.id;
-            if (!this.game?.currentActivation || this.game.currentActivation.unitId === unit.id) {
-              this.selectedMini = mini.key;
-            }
+            void this.selectMini(unit, mini);
           });
 
           const rect = document.createElementNS(ns, "rect");
@@ -178,7 +233,7 @@ function createMiniswarApp() {
           rect.setAttribute("height", mini.depthMm);
           rect.setAttribute(
             "class",
-            `mini p${unit.playerId}${isActiveUnit ? " active" : ""}${isActiveUnit && mini.key === pivotAxis ? " pivot-axis" : ""}`,
+            `mini p${unit.playerId}${isActiveUnit || isSelectedForActivation ? " active" : ""}${isSelectedForActivation ? " selected-unit" : ""}${isActiveUnit && mini.key === pivotAxis ? " pivot-axis" : ""}`,
           );
           miniGroup.appendChild(rect);
 

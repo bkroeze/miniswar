@@ -75,6 +75,11 @@ h2 {
   margin-bottom: 0.6rem;
 }
 
+h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
 .topbar p {
   color: var(--muted);
   margin-top: 0.2rem;
@@ -97,6 +102,33 @@ h2 {
 .action-grid {
   display: grid;
   gap: 0.75rem;
+}
+
+.setup-player {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.setup-units {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.setup-units li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.setup-units button {
+  padding: 0.25rem 0.4rem;
+  background: #fffdf8;
+  color: var(--ink);
+  border-color: var(--line);
 }
 
 label {
@@ -137,6 +169,10 @@ label {
 
 .mini.p2.active {
   fill: rgba(163, 63, 54, 0.18);
+}
+
+.mini.selected-unit {
+  stroke-width: 4;
 }
 
 .mini.pivot-axis {

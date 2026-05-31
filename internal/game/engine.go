@@ -34,13 +34,31 @@ func Base(width, depth int) (BaseSize, bool) {
 }
 
 func (e *Engine) NewGame(setup Setup) (*Game, error) {
-	p1, err := newUnit(1, "u1", "Player 1 Unit", setup.Player1, 5, 120, 160, 0)
-	if err != nil {
-		return nil, fmt.Errorf("player1: %w", err)
+	p1Setups := setup.Player1Units
+	if len(p1Setups) == 0 {
+		p1Setups = []UnitSetup{setup.Player1}
 	}
-	p2, err := newUnit(2, "u2", "Player 2 Unit", setup.Player2, 4, 520, 360, 180)
-	if err != nil {
-		return nil, fmt.Errorf("player2: %w", err)
+	p2Setups := setup.Player2Units
+	if len(p2Setups) == 0 {
+		p2Setups = []UnitSetup{setup.Player2}
+	}
+	if len(p1Setups) == 0 || len(p2Setups) == 0 {
+		return nil, errors.New("each player must have at least one unit")
+	}
+	units := make([]Unit, 0, len(p1Setups)+len(p2Setups))
+	for i, unitSetup := range p1Setups {
+		unit, err := newUnit(1, playerUnitID(1, i), fmt.Sprintf("Player 1 Unit %d", i+1), unitSetup, 5, 120, 130+i*115, 0)
+		if err != nil {
+			return nil, fmt.Errorf("player1 unit %d: %w", i+1, err)
+		}
+		units = append(units, unit)
+	}
+	for i, unitSetup := range p2Setups {
+		unit, err := newUnit(2, playerUnitID(2, i), fmt.Sprintf("Player 2 Unit %d", i+1), unitSetup, 4, 520, 360-i*115, 180)
+		if err != nil {
+			return nil, fmt.Errorf("player2 unit %d: %w", i+1, err)
+		}
+		units = append(units, unit)
 	}
 	first := e.rng.Intn(2) + 1
 	return &Game{
@@ -49,13 +67,23 @@ func (e *Engine) NewGame(setup Setup) (*Game, error) {
 		ActivePlayer:        first,
 		FirstPlayer:         first,
 		Phase:               "awaiting_activation",
-		Units:               []Unit{p1, p2},
+		Units:               units,
 		ActionHistory:       []ActionRecord{},
 		Snapshots:           []SnapshotRecord{},
 		CreatedAt:           time.Now().UTC(),
 		RandomSeed:          e.seed,
 		OpeningInitiativeD2: first,
 	}, nil
+}
+
+func playerUnitID(playerID, index int) string {
+	if playerID == 1 && index == 0 {
+		return "u1"
+	}
+	if playerID == 2 && index == 0 {
+		return "u2"
+	}
+	return fmt.Sprintf("p%d-u%d", playerID, index+1)
 }
 
 func newUnit(player int, id, name string, setup UnitSetup, activation, x, y, facing int) (Unit, error) {
@@ -406,15 +434,36 @@ func unitActivatedThisRound(g *Game, unitID string) bool {
 }
 
 func advanceTurn(g *Game) {
-	other := 1
-	if g.ActivePlayer == 1 {
-		other = 2
-	}
-	g.ActivePlayer = other
 	if allUnitsActivated(g) {
 		g.Round++
 		g.ActivePlayer = g.FirstPlayer
+		return
 	}
+	other := otherPlayer(g.ActivePlayer)
+	if playerHasUnactivatedUnit(g, other) {
+		g.ActivePlayer = other
+		return
+	}
+	if playerHasUnactivatedUnit(g, g.ActivePlayer) {
+		return
+	}
+	g.ActivePlayer = other
+}
+
+func otherPlayer(playerID int) int {
+	if playerID == 1 {
+		return 2
+	}
+	return 1
+}
+
+func playerHasUnactivatedUnit(g *Game, playerID int) bool {
+	for _, unit := range g.Units {
+		if unit.PlayerID == playerID && !unitActivatedThisRound(g, unit.ID) {
+			return true
+		}
+	}
+	return false
 }
 
 func allUnitsActivated(g *Game) bool {

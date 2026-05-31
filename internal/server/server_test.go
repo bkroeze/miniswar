@@ -31,7 +31,7 @@ func TestCreateActivateActionAndRewind(t *testing.T) {
 		t.Fatal(err)
 	}
 	g := created.Game
-	unit := g.Units[g.ActivePlayer-1]
+	unit := firstUnitForPlayer(g, g.ActivePlayer)
 
 	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/activate", `{"playerId":`+itoa(g.ActivePlayer)+`,"unitId":"`+unit.ID+`"}`)
 	if res.Code != http.StatusOK {
@@ -46,7 +46,7 @@ func TestCreateActivateActionAndRewind(t *testing.T) {
 	if err := json.Unmarshal(res.Body.Bytes(), &moved); err != nil {
 		t.Fatal(err)
 	}
-	movedUnit := moved.Game.Units[g.ActivePlayer-1]
+	movedUnit := unitByID(moved.Game, unit.ID)
 	if movedUnit.X == unit.X && movedUnit.Y == unit.Y {
 		t.Fatal("move response did not change unit position")
 	}
@@ -59,7 +59,7 @@ func TestCreateActivateActionAndRewind(t *testing.T) {
 	if err := json.Unmarshal(res.Body.Bytes(), &rewound); err != nil {
 		t.Fatal(err)
 	}
-	rewoundUnit := rewound.Game.Units[g.ActivePlayer-1]
+	rewoundUnit := unitByID(rewound.Game, unit.ID)
 	if rewoundUnit.X != unit.X || rewoundUnit.Y != unit.Y {
 		t.Fatalf("rewind did not restore unit position: got (%v,%v), want (%v,%v)", rewoundUnit.X, rewoundUnit.Y, unit.X, unit.Y)
 	}
@@ -76,4 +76,22 @@ func request(t *testing.T, handler http.Handler, method, path, body string) *htt
 
 func itoa(v int) string {
 	return strconv.Itoa(v)
+}
+
+func firstUnitForPlayer(g *game.Game, playerID int) game.Unit {
+	for _, unit := range g.Units {
+		if unit.PlayerID == playerID {
+			return unit
+		}
+	}
+	return game.Unit{}
+}
+
+func unitByID(g *game.Game, id string) game.Unit {
+	for _, unit := range g.Units {
+		if unit.ID == id {
+			return unit
+		}
+	}
+	return game.Unit{}
 }

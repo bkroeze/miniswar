@@ -18,6 +18,46 @@ func NewEngine(seed int64) *Engine {
 	return &Engine{seed: seed, rng: rand.New(rand.NewSource(seed))}
 }
 
+func Battlemaps() []Battlemap {
+	return []Battlemap{
+		{
+			ID:   "old_road",
+			Name: "Old Road",
+			Terrains: []TerrainZone{
+				{ID: "old-road-east", Type: TerrainPath, Label: "road", Shape: "rect", X: 0, Y: 230, Width: 760, Height: 55},
+				{ID: "old-road-north", Type: TerrainPath, Label: "road", Shape: "rect", X: 420, Y: 0, Width: 60, Height: 230},
+				{ID: "marsh-west", Type: TerrainRough, Label: "rough", Shape: "rect", X: 250, Y: 70, Width: 175, Height: 130},
+				{ID: "marsh-south", Type: TerrainRough, Label: "rough", Shape: "rect", X: 315, Y: 315, Width: 170, Height: 125},
+			},
+		},
+		{
+			ID:   "forest_wall",
+			Name: "Forest Wall",
+			Terrains: []TerrainZone{
+				{ID: "lane-east", Type: TerrainPath, Label: "path", Shape: "rect", X: 575, Y: 0, Width: 55, Height: 520},
+				{ID: "lane-cross", Type: TerrainPath, Label: "path", Shape: "rect", X: 120, Y: 210, Width: 510, Height: 45},
+				{ID: "north-forest", Type: TerrainRough, Label: "forest", Shape: "rect", X: 270, Y: 55, Width: 165, Height: 125},
+				{ID: "south-forest", Type: TerrainRough, Label: "forest", Shape: "rect", X: 455, Y: 315, Width: 110, Height: 120},
+				{ID: "stone-wall", Type: TerrainImpassable, Label: "wall", Shape: "rect", X: 300, Y: 300, Width: 60, Height: 145},
+				{ID: "low-wall", Type: TerrainImpassable, Label: "wall", Shape: "rect", X: 80, Y: 330, Width: 130, Height: 30},
+			},
+		},
+	}
+}
+
+func BattlemapByID(id string) (Battlemap, bool) {
+	maps := Battlemaps()
+	if id == "" {
+		return maps[0], true
+	}
+	for _, battlemap := range maps {
+		if battlemap.ID == id {
+			return battlemap, true
+		}
+	}
+	return Battlemap{}, false
+}
+
 func Base(width, depth int) (BaseSize, bool) {
 	switch {
 	case width == 25 && depth == 25:
@@ -34,6 +74,10 @@ func Base(width, depth int) (BaseSize, bool) {
 }
 
 func (e *Engine) NewGame(setup Setup) (*Game, error) {
+	battlemap, ok := BattlemapByID(setup.BattlemapID)
+	if !ok {
+		return nil, fmt.Errorf("unknown battlemap %q", setup.BattlemapID)
+	}
 	p1Setups := setup.Player1Units
 	if len(p1Setups) == 0 {
 		p1Setups = []UnitSetup{setup.Player1}
@@ -51,12 +95,18 @@ func (e *Engine) NewGame(setup Setup) (*Game, error) {
 		if err != nil {
 			return nil, fmt.Errorf("player1 unit %d: %w", i+1, err)
 		}
+		if unitOverlapsTerrain(unit, unit.X, unit.Y, battlemap.Terrains, TerrainImpassable) {
+			return nil, fmt.Errorf("%s placement overlaps impassable terrain", unit.Name)
+		}
 		units = append(units, unit)
 	}
 	for i, unitSetup := range p2Setups {
 		unit, err := newUnit(2, playerUnitID(2, i), fmt.Sprintf("Player 2 Unit %d", i+1), unitSetup, 4, 520, 360-i*115, 180)
 		if err != nil {
 			return nil, fmt.Errorf("player2 unit %d: %w", i+1, err)
+		}
+		if unitOverlapsTerrain(unit, unit.X, unit.Y, battlemap.Terrains, TerrainImpassable) {
+			return nil, fmt.Errorf("%s placement overlaps impassable terrain", unit.Name)
 		}
 		units = append(units, unit)
 	}
@@ -73,6 +123,7 @@ func (e *Engine) NewGame(setup Setup) (*Game, error) {
 		CreatedAt:           time.Now().UTC(),
 		RandomSeed:          e.seed,
 		OpeningInitiativeD2: first,
+		Battlemap:           battlemap,
 	}, nil
 }
 
@@ -192,10 +243,11 @@ func (e *Engine) ApplyAction(g *Game, req ActionRequest) (*ActionRecord, error) 
 	var messages []string
 	switch req.Type {
 	case ActionMove:
-		if err := applyMove(unit, act, req); err != nil {
+		moved, err := applyMove(unit, act, req, g.Battlemap.Terrains)
+		if err != nil {
 			return nil, err
 		}
-		messages = append(messages, fmt.Sprintf("Moved %s %.0fmm.", req.Direction, req.DistanceMM))
+		messages = append(messages, fmt.Sprintf("Moved %s %.0fmm.", req.Direction, moved))
 	case ActionPivot:
 		anchor, err := pivotAnchor(unit, req.AnchorKey)
 		if err != nil {
@@ -225,9 +277,9 @@ func (e *Engine) ApplyAction(g *Game, req ActionRequest) (*ActionRecord, error) 
 	return &rec, nil
 }
 
-func applyMove(unit *Unit, act *Activation, req ActionRequest) error {
+func applyMove(unit *Unit, act *Activation, req ActionRequest, terrains []TerrainZone) (float64, error) {
 	if req.Direction != "forward" && req.Direction != "backward" {
-		return errors.New("move direction must be forward or backward")
+		return 0, errors.New("move direction must be forward or backward")
 	}
 	limit := float64(unit.MovementLimitMM)
 	if req.Direction == "backward" {
@@ -237,16 +289,37 @@ func applyMove(unit *Unit, act *Activation, req ActionRequest) error {
 		limit = limit / 2
 	}
 	if req.DistanceMM <= 0 || req.DistanceMM > limit {
-		return fmt.Errorf("distance must be greater than 0 and no more than %.0fmm", limit)
+		return 0, fmt.Errorf("distance must be greater than 0 and no more than %.0fmm", limit)
 	}
 	sign := 1.0
 	if req.Direction == "backward" {
 		sign = -1
 	}
 	rad := float64(unit.FacingDeg) * math.Pi / 180
-	unit.X += math.Sin(rad) * req.DistanceMM * sign
-	unit.Y -= math.Cos(rad) * req.DistanceMM * sign
-	return nil
+	dx := math.Sin(rad) * sign
+	dy := -math.Cos(rad) * sign
+	remaining := limit
+	moved := 0.0
+	for moved < req.DistanceMM && remaining > 0 {
+		step := minFloat(1, req.DistanceMM-moved)
+		nextX := unit.X + dx*step
+		nextY := unit.Y + dy*step
+		if unitOverlapsTerrain(*unit, nextX, nextY, terrains, TerrainImpassable) {
+			break
+		}
+		cost := step
+		if unitOverlapsTerrain(*unit, nextX, nextY, terrains, TerrainRough) {
+			cost *= 2
+		}
+		if cost > remaining+0.000001 {
+			break
+		}
+		unit.X = nextX
+		unit.Y = nextY
+		moved += step
+		remaining -= cost
+	}
+	return moved, nil
 }
 
 func pivotAnchor(unit *Unit, key string) (Mini, error) {
@@ -329,6 +402,53 @@ func hasMini(unit *Unit, key string) bool {
 		}
 	}
 	return false
+}
+
+type rectBounds struct {
+	minX float64
+	minY float64
+	maxX float64
+	maxY float64
+}
+
+func unitOverlapsTerrain(unit Unit, x, y float64, terrains []TerrainZone, terrainType string) bool {
+	unitBox := unitBoundsAt(unit, x, y)
+	for _, terrain := range terrains {
+		if terrain.Type != terrainType || terrain.Shape != "rect" {
+			continue
+		}
+		terrainBox := rectBounds{minX: terrain.X, minY: terrain.Y, maxX: terrain.X + terrain.Width, maxY: terrain.Y + terrain.Height}
+		if rectsOverlap(unitBox, terrainBox) {
+			return true
+		}
+	}
+	return false
+}
+
+func unitBoundsAt(unit Unit, x, y float64) rectBounds {
+	box := rectBounds{minX: math.Inf(1), minY: math.Inf(1), maxX: math.Inf(-1), maxY: math.Inf(-1)}
+	for _, mini := range unit.Minis {
+		corners := [][2]float64{
+			{mini.RelX, mini.RelY},
+			{mini.RelX + float64(mini.WidthMM), mini.RelY},
+			{mini.RelX + float64(mini.WidthMM), mini.RelY + float64(mini.DepthMM)},
+			{mini.RelX, mini.RelY + float64(mini.DepthMM)},
+		}
+		for _, corner := range corners {
+			rotatedX, rotatedY := rotatePoint(corner[0], corner[1], unit.FacingDeg)
+			worldX := x + rotatedX
+			worldY := y + rotatedY
+			box.minX = math.Min(box.minX, worldX)
+			box.minY = math.Min(box.minY, worldY)
+			box.maxX = math.Max(box.maxX, worldX)
+			box.maxY = math.Max(box.maxY, worldY)
+		}
+	}
+	return box
+}
+
+func rectsOverlap(a, b rectBounds) bool {
+	return a.minX < b.maxX && a.maxX > b.minX && a.minY < b.maxY && a.maxY > b.minY
 }
 
 func miniWorldCenter(unit Unit, mini Mini, facingDeg int) (float64, float64) {
@@ -487,4 +607,11 @@ func normalizeDeg(deg int) int {
 		deg += 360
 	}
 	return deg
+}
+
+func minFloat(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
 }

@@ -20,6 +20,12 @@
   <main class="shell">
     <section class="setup">
       <h2>Setup</h2>
+      <label>Battlemap
+        <select x-model="setup.battlemapId">
+          <option value="old_road">Old Road</option>
+          <option value="forest_wall">Forest Wall</option>
+        </select>
+      </label>
       <div class="setup-grid">
         <div class="setup-player">
           <h3>Player 1</h3>
@@ -79,6 +85,7 @@
         </defs>
         <rect width="760" height="520" fill="#f4efe4"></rect>
         <rect width="760" height="520" fill="url(#grid)"></rect>
+        <g x-ref="terrain"></g>
         <g x-ref="units"></g>
       </svg>
     </section>

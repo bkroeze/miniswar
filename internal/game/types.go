@@ -9,6 +9,10 @@ const (
 	ActionAboutFace = "about_face"
 
 	MovementLimitMM = 100
+
+	TerrainRough      = "rough"
+	TerrainImpassable = "impassable"
+	TerrainPath       = "path"
 )
 
 type BaseSize struct {
@@ -23,6 +27,7 @@ type Setup struct {
 	Player2      UnitSetup   `json:"player2"`
 	Player1Units []UnitSetup `json:"player1Units,omitempty"`
 	Player2Units []UnitSetup `json:"player2Units,omitempty"`
+	BattlemapID  string      `json:"battlemapId,omitempty"`
 }
 
 type UnitSetup struct {
@@ -44,6 +49,24 @@ type Game struct {
 	CreatedAt           time.Time        `json:"createdAt"`
 	RandomSeed          int64            `json:"randomSeed"`
 	OpeningInitiativeD2 int              `json:"openingInitiativeD2"`
+	Battlemap           Battlemap        `json:"battlemap"`
+}
+
+type Battlemap struct {
+	ID       string        `json:"id"`
+	Name     string        `json:"name"`
+	Terrains []TerrainZone `json:"terrains"`
+}
+
+type TerrainZone struct {
+	ID     string  `json:"id"`
+	Type   string  `json:"type"`
+	Label  string  `json:"label"`
+	Shape  string  `json:"shape"`
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
 }
 
 type Unit struct {

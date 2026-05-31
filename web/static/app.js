@@ -5,6 +5,7 @@ function createMiniswarApp() {
     selectedMini: "",
     messages: [],
     setup: {
+      battlemapId: "old_road",
       player1: { base: "25x25", count: 12, units: [{ base: "25x25", count: 12 }] },
       player2: { base: "25x25", count: 10, units: [{ base: "25x25", count: 10 }] },
     },
@@ -17,6 +18,7 @@ function createMiniswarApp() {
         return { baseWidthMm, baseDepthMm };
       };
       return {
+        battlemapId: this.setup.battlemapId,
         player1Units: this.setup.player1.units.map((unit) => ({ ...parseBase(unit.base), count: unit.count })),
         player2Units: this.setup.player2.units.map((unit) => ({ ...parseBase(unit.base), count: unit.count })),
       };
@@ -206,6 +208,7 @@ function createMiniswarApp() {
     },
 
     renderArena() {
+      this.renderTerrain();
       const root = this.$refs.units;
       if (!root) return;
       root.replaceChildren();
@@ -247,6 +250,31 @@ function createMiniswarApp() {
           group.appendChild(miniGroup);
         }
         root.appendChild(group);
+      }
+    },
+
+    renderTerrain() {
+      const root = this.$refs.terrain;
+      if (!root) return;
+      root.replaceChildren();
+      const ns = "http://www.w3.org/2000/svg";
+      for (const terrain of this.game?.battlemap?.terrains || []) {
+        if (terrain.shape !== "rect") continue;
+        const rect = document.createElementNS(ns, "rect");
+        rect.setAttribute("x", terrain.x);
+        rect.setAttribute("y", terrain.y);
+        rect.setAttribute("width", terrain.width);
+        rect.setAttribute("height", terrain.height);
+        rect.setAttribute("class", `terrain ${terrain.type}`);
+        root.appendChild(rect);
+
+        const label = document.createElementNS(ns, "text");
+        label.setAttribute("x", terrain.x + terrain.width / 2);
+        label.setAttribute("y", terrain.y + terrain.height / 2 + 4);
+        label.setAttribute("text-anchor", "middle");
+        label.setAttribute("class", `terrain-label ${terrain.type}`);
+        label.textContent = terrain.label;
+        root.appendChild(label);
       }
     },
   };

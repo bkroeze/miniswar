@@ -116,7 +116,7 @@ func TestCompassFacingMovement(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			unit := Unit{X: 100, Y: 100, FacingDeg: tc.facing, MovementLimitMM: MovementLimitMM}
 			act := &Activation{}
-			err := applyMove(&unit, act, ActionRequest{Type: ActionMove, Direction: "forward", DistanceMM: 20})
+			_, err := applyMove(&unit, act, ActionRequest{Type: ActionMove, Direction: "forward", DistanceMM: 20}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -124,6 +124,74 @@ func TestCompassFacingMovement(t *testing.T) {
 				t.Fatalf("got (%v,%v), want (%v,%v)", unit.X, unit.Y, tc.wantX, tc.wantY)
 			}
 		})
+	}
+}
+
+func TestNewGameSelectsBattlemapAndKeepsPlacementsOffImpassable(t *testing.T) {
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{
+		BattlemapID: "forest_wall",
+		Player1:     UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 12},
+		Player2:     UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 10},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.Battlemap.ID != "forest_wall" {
+		t.Fatalf("got battlemap %q", g.Battlemap.ID)
+	}
+	for _, unit := range g.Units {
+		if unitOverlapsTerrain(unit, unit.X, unit.Y, g.Battlemap.Terrains, TerrainImpassable) {
+			t.Fatalf("%s overlaps impassable terrain at setup", unit.ID)
+		}
+	}
+}
+
+func TestMovementThroughRoughTerrainHalvesOnlyOverlappingDistance(t *testing.T) {
+	unit := Unit{
+		ID:              "u1",
+		MovementLimitMM: MovementLimitMM,
+		X:               0,
+		Y:               100,
+		FacingDeg:       0,
+		Minis: []Mini{{
+			Key:     "m1",
+			WidthMM: 25,
+			DepthMM: 25,
+		}},
+	}
+	moved, err := applyMove(&unit, &Activation{}, ActionRequest{Direction: "forward", DistanceMM: 100}, []TerrainZone{
+		{ID: "rough", Type: TerrainRough, Shape: "rect", X: -10, Y: -200, Width: 50, Height: 250},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved != 75 || unit.Y != 25 {
+		t.Fatalf("got moved %.0f y %.0f, want moved 75 y 25", moved, unit.Y)
+	}
+}
+
+func TestMovementStopsBeforeImpassableOverlap(t *testing.T) {
+	unit := Unit{
+		ID:              "u1",
+		MovementLimitMM: MovementLimitMM,
+		X:               0,
+		Y:               100,
+		FacingDeg:       0,
+		Minis: []Mini{{
+			Key:     "m1",
+			WidthMM: 25,
+			DepthMM: 25,
+		}},
+	}
+	moved, err := applyMove(&unit, &Activation{}, ActionRequest{Direction: "forward", DistanceMM: 100}, []TerrainZone{
+		{ID: "wall", Type: TerrainImpassable, Shape: "rect", X: -10, Y: -200, Width: 50, Height: 250},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved != 50 || unit.Y != 50 {
+		t.Fatalf("got moved %.0f y %.0f, want moved 50 y 50", moved, unit.Y)
 	}
 }
 

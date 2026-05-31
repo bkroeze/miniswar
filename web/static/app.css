@@ -98,6 +98,10 @@ h3 {
   padding-left: 0.85rem;
 }
 
+.setup > label {
+  margin-bottom: 0.8rem;
+}
+
 .setup-grid,
 .action-grid {
   display: grid;
@@ -148,6 +152,37 @@ label {
   border: 1px solid #9c927f;
   background: #f4efe4;
   display: block;
+}
+
+.terrain {
+  stroke-width: 2;
+}
+
+.terrain.path {
+  fill: rgba(196, 159, 99, 0.34);
+  stroke: rgba(131, 93, 49, 0.35);
+}
+
+.terrain.rough {
+  fill: rgba(78, 128, 82, 0.32);
+  stroke: rgba(42, 91, 50, 0.7);
+}
+
+.terrain.impassable {
+  fill: rgba(78, 75, 70, 0.72);
+  stroke: rgba(37, 35, 32, 0.9);
+}
+
+.terrain-label {
+  fill: rgba(34, 33, 29, 0.62);
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none;
+  text-transform: uppercase;
+}
+
+.terrain-label.impassable {
+  fill: rgba(255, 253, 248, 0.9);
 }
 
 .mini {

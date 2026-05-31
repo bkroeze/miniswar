@@ -4,11 +4,14 @@ import "time"
 
 const (
 	ActionActivate  = "activate"
+	ActionPlace     = "place"
 	ActionMove      = "move"
 	ActionPivot     = "pivot"
 	ActionAboutFace = "about_face"
 
 	MovementLimitMM = 100
+	ArenaWidthMM    = 760
+	ArenaHeightMM   = 520
 
 	TerrainRough      = "rough"
 	TerrainImpassable = "impassable"
@@ -42,6 +45,7 @@ type Game struct {
 	ActivePlayer        int              `json:"activePlayer"`
 	FirstPlayer         int              `json:"firstPlayer"`
 	Phase               string           `json:"phase"`
+	PlacementIndex      int              `json:"placementIndex"`
 	CurrentActivation   *Activation      `json:"currentActivation,omitempty"`
 	Units               []Unit           `json:"units"`
 	ActionHistory       []ActionRecord   `json:"actionHistory"`
@@ -79,6 +83,7 @@ type Unit struct {
 	X                float64  `json:"x"`
 	Y                float64  `json:"y"`
 	FacingDeg        int      `json:"facingDeg"`
+	Placed           bool     `json:"placed"`
 	Minis            []Mini   `json:"minis"`
 }
 
@@ -135,6 +140,14 @@ type APIResponse struct {
 type ActivateRequest struct {
 	PlayerID int    `json:"playerId"`
 	UnitID   string `json:"unitId"`
+}
+
+type PlacementRequest struct {
+	PlayerID  int     `json:"playerId"`
+	UnitID    string  `json:"unitId"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	FacingDeg *int    `json:"facingDeg,omitempty"`
 }
 
 type ActionRequest struct {

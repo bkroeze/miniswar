@@ -80,6 +80,7 @@ func TestActivationAndMove(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	placeDefaultUnits(g)
 	unit := firstUnitForPlayer(g, g.ActivePlayer)
 	_, _, err = engine.Activate(g, ActivateRequest{PlayerID: g.ActivePlayer, UnitID: unit.ID})
 	if err != nil {
@@ -140,10 +141,97 @@ func TestNewGameSelectsBattlemapAndKeepsPlacementsOffImpassable(t *testing.T) {
 	if g.Battlemap.ID != "forest_wall" {
 		t.Fatalf("got battlemap %q", g.Battlemap.ID)
 	}
+	if g.Phase != "setup" {
+		t.Fatalf("new game should start in setup phase, got %q", g.Phase)
+	}
+	placeDefaultUnits(g)
 	for _, unit := range g.Units {
 		if unitOverlapsTerrain(unit, unit.X, unit.Y, g.Battlemap.Terrains, TerrainImpassable) {
 			t.Fatalf("%s overlaps impassable terrain at setup", unit.ID)
 		}
+	}
+}
+
+func TestPlaceUnitCentersOfficerAndAlternatesPlayers(t *testing.T) {
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{
+		Player1Units: []UnitSetup{
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		},
+		Player2Units: []UnitSetup{
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.ActivePlayer = 1
+	g.FirstPlayer = 1
+	rec, err := engine.PlaceUnit(g, PlacementRequest{PlayerID: 1, UnitID: "u1", X: 100, Y: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Type != ActionPlace || g.ActivePlayer != 2 {
+		t.Fatalf("got action %s active player %d", rec.Type, g.ActivePlayer)
+	}
+	unit, _ := findUnit(g, "u1")
+	officer, _ := pivotAnchor(unit, "")
+	officerX, officerY := miniWorldCenter(*unit, officer, unit.FacingDeg)
+	if mathRound(officerX) != 100 || mathRound(officerY) != 100 {
+		t.Fatalf("officer center got (%v,%v)", officerX, officerY)
+	}
+	if unit.FacingDeg != 135 {
+		t.Fatalf("got facing %d", unit.FacingDeg)
+	}
+	if _, err := engine.PlaceUnit(g, PlacementRequest{PlayerID: 2, UnitID: "u2", X: 600, Y: 400}); err != nil {
+		t.Fatal(err)
+	}
+	if g.ActivePlayer != 1 {
+		t.Fatalf("player 1 should place extra unit, got %d", g.ActivePlayer)
+	}
+	if _, err := engine.PlaceUnit(g, PlacementRequest{PlayerID: 1, UnitID: "p1-u2", X: 140, Y: 400}); err != nil {
+		t.Fatal(err)
+	}
+	if g.Phase != "awaiting_activation" || g.ActivePlayer != g.FirstPlayer {
+		t.Fatalf("setup should complete to first player, phase %q active %d first %d", g.Phase, g.ActivePlayer, g.FirstPlayer)
+	}
+}
+
+func TestPlaceUnitRejectsImpassableTerrain(t *testing.T) {
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{
+		BattlemapID: "forest_wall",
+		Player1:     UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		Player2:     UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.ActivePlayer = 1
+	_, err = engine.PlaceUnit(g, PlacementRequest{PlayerID: 1, UnitID: "u1", X: 330, Y: 340})
+	if err == nil {
+		t.Fatal("expected impassable placement error")
+	}
+}
+
+func TestPlaceUnitAcceptsExplicitFacing(t *testing.T) {
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.ActivePlayer = 1
+	facing := 150
+	if _, err := engine.PlaceUnit(g, PlacementRequest{PlayerID: 1, UnitID: "u1", X: 130, Y: 130, FacingDeg: &facing}); err != nil {
+		t.Fatal(err)
+	}
+	unit, _ := findUnit(g, "u1")
+	if unit.FacingDeg != 150 {
+		t.Fatalf("got facing %d", unit.FacingDeg)
 	}
 }
 
@@ -204,6 +292,7 @@ func TestSecondMoveLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	placeDefaultUnits(g)
 	unit := firstUnitForPlayer(g, g.ActivePlayer)
 	g.CurrentActivation = &Activation{UnitID: unit.ID, PlayerID: unit.PlayerID, Success: true, ActionsRemaining: 2}
 	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: unit.PlayerID, UnitID: unit.ID, Type: ActionMove, Direction: "forward", DistanceMM: 80}); err != nil {
@@ -223,6 +312,7 @@ func TestPivotDefaultsToOfficerAsFixedAxis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	placeDefaultUnits(g)
 	unit := &g.Units[0]
 	officer, err := pivotAnchor(unit, "")
 	if err != nil {
@@ -251,6 +341,7 @@ func TestPivotUsesSelectedAnchorAsFixedAxis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	placeDefaultUnits(g)
 	unit := &g.Units[0]
 	anchor := unit.Minis[0]
 	beforeX, beforeY := miniWorldCenter(*unit, anchor, unit.FacingDeg)
@@ -310,6 +401,7 @@ func TestUnevenUnitCountsFinishRemainingActivationsBeforeNewRound(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	placeDefaultUnits(g)
 	g.ActivePlayer = 1
 
 	finishActivation(t, engine, g, "u1", 1)
@@ -340,6 +432,7 @@ func TestCannotActivateAlreadyActivatedUnitWhenMultipleChoicesExist(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
+	placeDefaultUnits(g)
 	g.ActivePlayer = 1
 	finishActivation(t, engine, g, "u1", 1)
 	g.ActivePlayer = 1
@@ -360,6 +453,7 @@ func TestAboutFaceSwapsOfficerWithLastFullRankAndKeepsPartialRankBack(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	placeDefaultUnits(g)
 	unit := &g.Units[0]
 	officer, ok := miniByKey(unit, "p1-u1-m03")
 	if !ok {
@@ -425,6 +519,29 @@ func firstUnitForPlayer(g *Game, playerID int) Unit {
 		}
 	}
 	return Unit{}
+}
+
+func placeDefaultUnits(g *Game) {
+	p1 := 0
+	p2 := 0
+	for i := range g.Units {
+		unit := &g.Units[i]
+		switch unit.PlayerID {
+		case 1:
+			unit.X = 120
+			unit.Y = float64(130 + p1*115)
+			unit.FacingDeg = 0
+			p1++
+		case 2:
+			unit.X = 520
+			unit.Y = float64(360 - p2*115)
+			unit.FacingDeg = 180
+			p2++
+		}
+		unit.Placed = true
+	}
+	g.Phase = "awaiting_activation"
+	g.ActivePlayer = g.FirstPlayer
 }
 
 func finishActivation(t *testing.T, engine *Engine, g *Game, unitID string, playerID int) {

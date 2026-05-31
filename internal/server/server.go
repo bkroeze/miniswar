@@ -35,6 +35,7 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 	mux.HandleFunc("POST /api/games", s.createGame)
 	mux.HandleFunc("GET /api/games/{id}", s.getGame)
+	mux.HandleFunc("POST /api/games/{id}/placements", s.placeUnit)
 	mux.HandleFunc("POST /api/games/{id}/activate", s.activate)
 	mux.HandleFunc("POST /api/games/{id}/actions", s.action)
 	mux.HandleFunc("GET /api/games/{id}/actions", s.actions)
@@ -85,6 +86,34 @@ func (s *Server) getGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Game: g, LegalActions: game.LegalActions(g)})
+}
+
+func (s *Server) placeUnit(w http.ResponseWriter, r *http.Request) {
+	g, err := s.store.GetGame(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	before, err := game.Snapshot(g)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	var req game.PlacementRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	rec, err := s.engine.PlaceUnit(g, req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.persistMutation(g, rec.Index, before); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Game: g, Action: rec, LegalActions: game.LegalActions(g), Messages: rec.Messages})
 }
 
 func (s *Server) activate(w http.ResponseWriter, r *http.Request) {

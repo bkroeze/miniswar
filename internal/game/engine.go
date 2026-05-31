@@ -91,22 +91,16 @@ func (e *Engine) NewGame(setup Setup) (*Game, error) {
 	}
 	units := make([]Unit, 0, len(p1Setups)+len(p2Setups))
 	for i, unitSetup := range p1Setups {
-		unit, err := newUnit(1, playerUnitID(1, i), fmt.Sprintf("Player 1 Unit %d", i+1), unitSetup, 5, 120, 130+i*115, 0)
+		unit, err := newUnit(1, playerUnitID(1, i), fmt.Sprintf("Player 1 Unit %d", i+1), unitSetup, 5, 0, 0, 0)
 		if err != nil {
 			return nil, fmt.Errorf("player1 unit %d: %w", i+1, err)
-		}
-		if unitOverlapsTerrain(unit, unit.X, unit.Y, battlemap.Terrains, TerrainImpassable) {
-			return nil, fmt.Errorf("%s placement overlaps impassable terrain", unit.Name)
 		}
 		units = append(units, unit)
 	}
 	for i, unitSetup := range p2Setups {
-		unit, err := newUnit(2, playerUnitID(2, i), fmt.Sprintf("Player 2 Unit %d", i+1), unitSetup, 4, 520, 360-i*115, 180)
+		unit, err := newUnit(2, playerUnitID(2, i), fmt.Sprintf("Player 2 Unit %d", i+1), unitSetup, 4, 0, 0, 180)
 		if err != nil {
 			return nil, fmt.Errorf("player2 unit %d: %w", i+1, err)
-		}
-		if unitOverlapsTerrain(unit, unit.X, unit.Y, battlemap.Terrains, TerrainImpassable) {
-			return nil, fmt.Errorf("%s placement overlaps impassable terrain", unit.Name)
 		}
 		units = append(units, unit)
 	}
@@ -116,7 +110,7 @@ func (e *Engine) NewGame(setup Setup) (*Game, error) {
 		Round:               1,
 		ActivePlayer:        first,
 		FirstPlayer:         first,
-		Phase:               "awaiting_activation",
+		Phase:               "setup",
 		Units:               units,
 		ActionHistory:       []ActionRecord{},
 		Snapshots:           []SnapshotRecord{},
@@ -186,7 +180,66 @@ func layoutMinis(unit Unit, count int) []Mini {
 	return minis
 }
 
+func (e *Engine) PlaceUnit(g *Game, req PlacementRequest) (*ActionRecord, error) {
+	if g.Phase != "setup" {
+		return nil, errors.New("unit placement is already complete")
+	}
+	unitID, ok := placementUnitID(g)
+	if !ok {
+		return nil, errors.New("no unit remains to place")
+	}
+	if req.UnitID != unitID {
+		return nil, fmt.Errorf("next unit to place is %s", unitID)
+	}
+	if req.PlayerID != g.ActivePlayer {
+		return nil, fmt.Errorf("player %d is placing", g.ActivePlayer)
+	}
+	unit, ok := findUnit(g, req.UnitID)
+	if !ok || unit.PlayerID != req.PlayerID {
+		return nil, errors.New("unit does not belong to placing player")
+	}
+	if unit.Placed {
+		return nil, errors.New("unit is already placed")
+	}
+
+	unit.FacingDeg = facingTowardArenaCenter(req.X, req.Y)
+	if req.FacingDeg != nil {
+		unit.FacingDeg = normalizeDeg(*req.FacingDeg)
+	}
+	officer, err := pivotAnchor(unit, "")
+	if err != nil {
+		return nil, err
+	}
+	relX, relY := rotatePoint(miniCenterX(officer), miniCenterY(officer), unit.FacingDeg)
+	unit.X = req.X - relX
+	unit.Y = req.Y - relY
+	unit.Placed = true
+	if unitOverlapsTerrain(*unit, unit.X, unit.Y, g.Battlemap.Terrains, TerrainImpassable) {
+		unit.Placed = false
+		return nil, errors.New("placement overlaps impassable terrain")
+	}
+	if !unitInsideArena(*unit, unit.X, unit.Y) {
+		unit.Placed = false
+		return nil, errors.New("placement must keep the whole unit in the arena")
+	}
+
+	g.PlacementIndex++
+	messages := []string{fmt.Sprintf("Placed %s facing %d degrees.", unit.Name, unit.FacingDeg)}
+	if allUnitsPlaced(g) {
+		g.Phase = "awaiting_activation"
+		g.ActivePlayer = g.FirstPlayer
+		messages = append(messages, fmt.Sprintf("Setup complete. Player %d starts round 1.", g.ActivePlayer))
+	} else {
+		g.ActivePlayer = nextPlacementPlayer(g)
+	}
+	rec := g.appendRecord(ActionPlace, req.PlayerID, req.UnitID, req, map[string]any{"unit": unit}, messages)
+	return &rec, nil
+}
+
 func (e *Engine) Activate(g *Game, req ActivateRequest) (*ActionRecord, []int, error) {
+	if g.Phase == "setup" {
+		return nil, nil, errors.New("finish unit placement before activating")
+	}
 	if g.CurrentActivation != nil {
 		return nil, nil, errors.New("current unit still has actions remaining")
 	}
@@ -225,6 +278,9 @@ func (e *Engine) Activate(g *Game, req ActivateRequest) (*ActionRecord, []int, e
 }
 
 func (e *Engine) ApplyAction(g *Game, req ActionRequest) (*ActionRecord, error) {
+	if g.Phase == "setup" {
+		return nil, errors.New("finish unit placement before taking actions")
+	}
 	if g.CurrentActivation == nil {
 		return nil, errors.New("activate a unit before taking actions")
 	}
@@ -380,10 +436,52 @@ func Restore(snapshot string) (*Game, error) {
 }
 
 func LegalActions(g *Game) []string {
+	if g.Phase == "setup" {
+		return []string{ActionPlace}
+	}
 	if g.CurrentActivation == nil {
 		return []string{ActionActivate}
 	}
 	return []string{ActionMove, ActionPivot, ActionAboutFace}
+}
+
+func placementUnitID(g *Game) (string, bool) {
+	player := g.ActivePlayer
+	for checked := 0; checked < 2; checked++ {
+		for _, unit := range g.Units {
+			if unit.PlayerID == player && !unit.Placed {
+				return unit.ID, true
+			}
+		}
+		player = otherPlayer(player)
+	}
+	return "", false
+}
+
+func nextPlacementPlayer(g *Game) int {
+	other := otherPlayer(g.ActivePlayer)
+	if playerHasUnplacedUnit(g, other) {
+		return other
+	}
+	return g.ActivePlayer
+}
+
+func playerHasUnplacedUnit(g *Game, playerID int) bool {
+	for _, unit := range g.Units {
+		if unit.PlayerID == playerID && !unit.Placed {
+			return true
+		}
+	}
+	return false
+}
+
+func allUnitsPlaced(g *Game) bool {
+	for _, unit := range g.Units {
+		if !unit.Placed {
+			return false
+		}
+	}
+	return true
 }
 
 func findUnit(g *Game, id string) (*Unit, bool) {
@@ -449,6 +547,18 @@ func unitBoundsAt(unit Unit, x, y float64) rectBounds {
 
 func rectsOverlap(a, b rectBounds) bool {
 	return a.minX < b.maxX && a.maxX > b.minX && a.minY < b.maxY && a.maxY > b.minY
+}
+
+func unitInsideArena(unit Unit, x, y float64) bool {
+	box := unitBoundsAt(unit, x, y)
+	return box.minX >= 0 && box.minY >= 0 && box.maxX <= ArenaWidthMM && box.maxY <= ArenaHeightMM
+}
+
+func facingTowardArenaCenter(x, y float64) int {
+	dx := float64(ArenaWidthMM)/2 - x
+	dy := float64(ArenaHeightMM)/2 - y
+	deg := math.Atan2(dx, -dy) * 180 / math.Pi
+	return normalizeDeg(int(math.Round(deg/45) * 45))
 }
 
 func miniWorldCenter(unit Unit, mini Mini, facingDeg int) (float64, float64) {

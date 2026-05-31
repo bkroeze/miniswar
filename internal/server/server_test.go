@@ -31,6 +31,22 @@ func TestCreateActivateActionAndRewind(t *testing.T) {
 		t.Fatal(err)
 	}
 	g := created.Game
+	if g.Phase != "setup" {
+		t.Fatalf("created game should start setup, got %q", g.Phase)
+	}
+	for g.Phase == "setup" {
+		unit := firstUnplacedUnitForPlayer(g, g.ActivePlayer)
+		x, y := placementPoint(unit.PlayerID)
+		res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/placements", `{"playerId":`+itoa(unit.PlayerID)+`,"unitId":"`+unit.ID+`","x":`+itoa(x)+`,"y":`+itoa(y)+`}`)
+		if res.Code != http.StatusOK {
+			t.Fatalf("placement status %d: %s", res.Code, res.Body.String())
+		}
+		var placed game.APIResponse
+		if err := json.Unmarshal(res.Body.Bytes(), &placed); err != nil {
+			t.Fatal(err)
+		}
+		g = placed.Game
+	}
 	unit := firstUnitForPlayer(g, g.ActivePlayer)
 
 	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/activate", `{"playerId":`+itoa(g.ActivePlayer)+`,"unitId":"`+unit.ID+`"}`)
@@ -51,7 +67,7 @@ func TestCreateActivateActionAndRewind(t *testing.T) {
 		t.Fatal("move response did not change unit position")
 	}
 
-	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/rewind", `{"actionIndex":0}`)
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/rewind", `{"actionIndex":`+itoa(moved.Action.Index)+`}`)
 	if res.Code != http.StatusOK {
 		t.Fatalf("rewind status %d: %s", res.Code, res.Body.String())
 	}
@@ -94,4 +110,20 @@ func unitByID(g *game.Game, id string) game.Unit {
 		}
 	}
 	return game.Unit{}
+}
+
+func firstUnplacedUnitForPlayer(g *game.Game, playerID int) game.Unit {
+	for _, unit := range g.Units {
+		if unit.PlayerID == playerID && !unit.Placed {
+			return unit
+		}
+	}
+	return game.Unit{}
+}
+
+func placementPoint(playerID int) (int, int) {
+	if playerID == 1 {
+		return 120, 120
+	}
+	return 620, 400
 }

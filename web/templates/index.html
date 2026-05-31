@@ -17,67 +17,74 @@
     <button type="button" @click="createGame()">New Game</button>
   </header>
 
-  <main class="shell">
+  <main class="shell" :class="{ 'setup-active': isSetupPhase() }">
     <section class="setup">
-      <h2>Setup</h2>
-      <label>Battlemap
-        <select x-model="setup.battlemapId">
-          <option value="old_road">Old Road</option>
-          <option value="forest_wall">Forest Wall</option>
-        </select>
-      </label>
-      <div class="setup-grid">
-        <div class="setup-player">
-          <h3>Player 1</h3>
-          <label>Base
-            <select x-model="setup.player1.base">
-              <option value="25x25">25x25</option>
-              <option value="25x50">25x50</option>
-              <option value="50x50">50x50</option>
-              <option value="50x100">50x100</option>
-            </select>
-          </label>
-          <label>Minis
-            <input type="number" min="1" max="20" x-model.number="setup.player1.count">
-          </label>
-          <button type="button" @click="addSetupUnit(1)">Add P1 Unit</button>
-          <ol class="setup-units">
-            <template x-for="(unit, index) in setup.player1.units" :key="`p1-${index}`">
-              <li>
-                <span x-text="`${unit.count} minis on ${unit.base}`"></span>
-                <button type="button" @click="removeSetupUnit(1, index)" :disabled="setup.player1.units.length === 1">remove</button>
-              </li>
-            </template>
-          </ol>
+      <details class="setup-disclosure">
+        <summary>New Game Configuration</summary>
+        <label>Battlemap
+          <select x-model="setup.battlemapId">
+            <option value="old_road">Old Road</option>
+            <option value="forest_wall">Forest Wall</option>
+          </select>
+        </label>
+        <div class="setup-grid">
+          <div class="setup-player">
+            <h3>Player 1</h3>
+            <label>Base
+              <select x-model="setup.player1.base">
+                <option value="25x25">25x25</option>
+                <option value="25x50">25x50</option>
+                <option value="50x50">50x50</option>
+                <option value="50x100">50x100</option>
+              </select>
+            </label>
+            <label>Minis
+              <input type="number" min="1" max="20" x-model.number="setup.player1.count">
+            </label>
+            <button type="button" @click="addSetupUnit(1)">Add P1 Unit</button>
+            <ol class="setup-units">
+              <template x-for="(unit, index) in setup.player1.units" :key="`p1-${index}`">
+                <li>
+                  <span x-text="`${unit.count} minis on ${unit.base}`"></span>
+                  <button type="button" @click="removeSetupUnit(1, index)" :disabled="setup.player1.units.length === 1">remove</button>
+                </li>
+              </template>
+            </ol>
+          </div>
+          <div class="setup-player">
+            <h3>Player 2</h3>
+            <label>Base
+              <select x-model="setup.player2.base">
+                <option value="25x25">25x25</option>
+                <option value="25x50">25x50</option>
+                <option value="50x50">50x50</option>
+                <option value="50x100">50x100</option>
+              </select>
+            </label>
+            <label>Minis
+              <input type="number" min="1" max="20" x-model.number="setup.player2.count">
+            </label>
+            <button type="button" @click="addSetupUnit(2)">Add P2 Unit</button>
+            <ol class="setup-units">
+              <template x-for="(unit, index) in setup.player2.units" :key="`p2-${index}`">
+                <li>
+                  <span x-text="`${unit.count} minis on ${unit.base}`"></span>
+                  <button type="button" @click="removeSetupUnit(2, index)" :disabled="setup.player2.units.length === 1">remove</button>
+                </li>
+              </template>
+            </ol>
+          </div>
         </div>
-        <div class="setup-player">
-          <h3>Player 2</h3>
-          <label>Base
-            <select x-model="setup.player2.base">
-              <option value="25x25">25x25</option>
-              <option value="25x50">25x50</option>
-              <option value="50x50">50x50</option>
-              <option value="50x100">50x100</option>
-            </select>
-          </label>
-          <label>Minis
-            <input type="number" min="1" max="20" x-model.number="setup.player2.count">
-          </label>
-          <button type="button" @click="addSetupUnit(2)">Add P2 Unit</button>
-          <ol class="setup-units">
-            <template x-for="(unit, index) in setup.player2.units" :key="`p2-${index}`">
-              <li>
-                <span x-text="`${unit.count} minis on ${unit.base}`"></span>
-                <button type="button" @click="removeSetupUnit(2, index)" :disabled="setup.player2.units.length === 1">remove</button>
-              </li>
-            </template>
-          </ol>
-        </div>
-      </div>
+      </details>
     </section>
 
     <section class="arena-panel">
-      <svg class="arena" viewBox="0 0 760 520" role="img" aria-label="Miniswar arena">
+      <div class="placement-hud" x-show="isSetupPhase()">
+        <span x-text="selectedUnitLabel()"></span>
+        <button type="button" @click="confirmPlacement()" :disabled="!placementPreview">Confirm</button>
+        <span class="placement-message" x-text="messages[0] || ''"></span>
+      </div>
+      <svg class="arena" viewBox="0 0 760 520" role="img" aria-label="Miniswar arena" @click.capture="arenaClicked($event)">
         <defs>
           <pattern id="grid" width="25" height="25" patternUnits="userSpaceOnUse">
             <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#d7d0c2" stroke-width="1"/>

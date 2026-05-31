@@ -4,6 +4,7 @@ function createMiniswarApp() {
     selectedUnit: "",
     selectedMini: "",
     messages: [],
+    placementPreview: null,
     setup: {
       battlemapId: "old_road",
       player1: { base: "25x25", count: 12, units: [{ base: "25x25", count: 12 }] },
@@ -11,6 +12,10 @@ function createMiniswarApp() {
     },
     move: { direction: "forward", distanceMm: 50 },
     pivot: { facingDeg: 0 },
+
+    isSetupPhase() {
+      return this.game?.phase === "setup";
+    },
 
     setupPayload() {
       const parseBase = (value) => {
@@ -58,6 +63,29 @@ function createMiniswarApp() {
       this.messages = [...(response.messages || []), ...(response.errors || [])];
     },
 
+    async confirmPlacement() {
+      const unit = this.currentPlacementUnit();
+      if (!unit || !this.placementPreview) return;
+      const response = await this.api(`/api/games/${this.game.id}/placements`, {
+        method: "POST",
+        body: JSON.stringify({
+          playerId: unit.playerId,
+          unitId: unit.id,
+          x: this.placementPreview.officerX,
+          y: this.placementPreview.officerY,
+          facingDeg: this.placementPreview.facingDeg,
+        }),
+      });
+      if (response.ok) {
+        this.placementPreview = null;
+        await this.setGame(response.game, { resetSelection: true });
+      }
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
+      if (!response.ok) {
+        await this.renderArenaSoon();
+      }
+    },
+
     async takeAction(type) {
       const unit = this.currentActivationUnit();
       if (!unit) return;
@@ -97,6 +125,13 @@ function createMiniswarApp() {
       return this.game?.units?.find((unit) => unit.playerId === this.game.activePlayer);
     },
 
+    currentPlacementUnit() {
+      if (!this.isSetupPhase()) return null;
+      const active = (this.game?.units || []).find((unit) => unit.playerId === this.game.activePlayer && !unit.placed);
+      if (active) return active;
+      return (this.game?.units || []).find((unit) => !unit.placed) || null;
+    },
+
     selectedActivatableUnit() {
       const selected = this.game?.units?.find((unit) => unit.id === this.selectedUnit);
       if (selected && selected.playerId === this.game.activePlayer && !this.unitActivatedThisRound(selected.id)) {
@@ -128,6 +163,10 @@ function createMiniswarApp() {
 
     selectedUnitLabel() {
       if (!this.game) return "";
+      if (this.isSetupPhase()) {
+        const unit = this.currentPlacementUnit();
+        return unit ? `Player ${unit.playerId}: place ${unit.name}` : "Setup complete";
+      }
       const unit = this.currentActivationUnit() || this.selectedActivatableUnit();
       return unit ? `${unit.name} (${unit.id})` : "No unit";
     },
@@ -181,6 +220,10 @@ function createMiniswarApp() {
 
     statusLine() {
       if (!this.game) return "Loading";
+      if (this.isSetupPhase()) {
+        const unit = this.currentPlacementUnit();
+        return unit ? `Setup: player ${unit.playerId} placing ${unit.name}` : "Setup";
+      }
       const activation = this.game.currentActivation;
       if (activation) {
         return `Round ${this.game.round}, player ${activation.playerId}, ${activation.actionsRemaining} action(s) remaining`;
@@ -190,6 +233,12 @@ function createMiniswarApp() {
 
     async setGame(game, options = {}) {
       this.game = game;
+      if (this.isSetupPhase()) {
+        this.selectedUnit = this.currentPlacementUnit()?.id || "";
+        this.selectedMini = "";
+        await this.renderArenaSoon();
+        return;
+      }
       const selectedStillValid = this.game.units.some((unit) => unit.id === this.selectedUnit);
       const selectedCanActivate = this.selectedUnit && this.activatableUnits().some((unit) => unit.id === this.selectedUnit);
       if (options.resetSelection || !selectedStillValid || (!this.currentActivationUnit() && !selectedCanActivate)) {
@@ -207,19 +256,81 @@ function createMiniswarApp() {
       this.renderArena();
     },
 
+    arenaPoint(event) {
+      const svg = event.currentTarget;
+      const point = svg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      const transformed = point.matrixTransform(svg.getScreenCTM().inverse());
+      return { x: transformed.x, y: transformed.y };
+    },
+
+    async arenaClicked(event) {
+      if (!this.isSetupPhase()) return;
+      const clickedUnit = event.target.closest("[data-unit]");
+      if (clickedUnit && !clickedUnit.classList.contains("placement-preview")) return;
+      const unit = this.currentPlacementUnit();
+      if (!unit) return;
+      const point = this.arenaPoint(event);
+      const sameSpot =
+        this.placementPreview?.unitId === unit.id &&
+        Math.hypot(this.placementPreview.officerX - point.x, this.placementPreview.officerY - point.y) <= 24;
+      const facingDeg = sameSpot ? (this.placementPreview.facingDeg + 15) % 360 : this.facingTowardArenaCenter(point.x, point.y);
+      const officerX = sameSpot ? this.placementPreview.officerX : point.x;
+      const officerY = sameSpot ? this.placementPreview.officerY : point.y;
+      this.placementPreview = this.previewPlacement(unit, officerX, officerY, facingDeg);
+      await this.renderArenaSoon();
+    },
+
+    previewPlacement(unit, officerX, officerY, facingDeg) {
+      const officer = unit.minis.find((mini) => mini.isOfficer) || unit.minis[0];
+      const center = this.rotatePoint(officer.relX + officer.widthMm / 2, officer.relY + officer.depthMm / 2, facingDeg);
+      return {
+        unitId: unit.id,
+        officerX,
+        officerY,
+        x: officerX - center.x,
+        y: officerY - center.y,
+        facingDeg,
+      };
+    },
+
+    facingTowardArenaCenter(x, y) {
+      const deg = (Math.atan2(380 - x, -(260 - y)) * 180) / Math.PI;
+      return ((Math.round(deg / 45) * 45) % 360 + 360) % 360;
+    },
+
+    rotatePoint(x, y, deg) {
+      const rad = (deg * Math.PI) / 180;
+      return { x: x * Math.cos(rad) - y * Math.sin(rad), y: x * Math.sin(rad) + y * Math.cos(rad) };
+    },
+
     renderArena() {
       this.renderTerrain();
       const root = this.$refs.units;
       if (!root) return;
       root.replaceChildren();
       const ns = "http://www.w3.org/2000/svg";
-      for (const unit of this.game?.units || []) {
+      const units = (this.game?.units || []).filter((unit) => unit.placed);
+      if (this.isSetupPhase() && this.placementPreview) {
+        const previewUnit = this.currentPlacementUnit();
+        if (previewUnit) {
+          units.push({ ...previewUnit, x: this.placementPreview.x, y: this.placementPreview.y, facingDeg: this.placementPreview.facingDeg, placed: true, preview: true });
+        }
+      }
+      for (const unit of units) {
         const isActiveUnit = this.game?.currentActivation?.unitId === unit.id;
         const isSelectedForActivation = !this.game?.currentActivation && unit.id === this.selectedUnit && unit.playerId === this.game.activePlayer && !this.unitActivatedThisRound(unit.id);
         const pivotAxis = isActiveUnit ? this.pivotAxisKey() : "";
         const group = document.createElementNS(ns, "g");
         group.setAttribute("transform", `translate(${unit.x} ${unit.y}) rotate(${unit.facingDeg})`);
+        group.setAttribute("data-unit", unit.id);
+        if (unit.preview) {
+          group.setAttribute("class", "placement-preview");
+          group.setAttribute("pointer-events", "none");
+        }
         group.addEventListener("click", () => {
+          if (unit.preview) return;
           void this.selectUnit(unit);
         });
 
@@ -227,6 +338,7 @@ function createMiniswarApp() {
           const miniGroup = document.createElementNS(ns, "g");
           miniGroup.setAttribute("transform", `translate(${mini.relX} ${mini.relY})`);
           miniGroup.addEventListener("click", (event) => {
+            if (unit.preview) return;
             event.stopPropagation();
             void this.selectMini(unit, mini);
           });

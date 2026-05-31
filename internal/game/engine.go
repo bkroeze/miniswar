@@ -176,8 +176,9 @@ func (e *Engine) ApplyAction(g *Game, req ActionRequest) (*ActionRecord, error) 
 		applyPivot(unit, anchor, req.FacingDeg)
 		messages = append(messages, fmt.Sprintf("Pivoted to %d degrees around %s.", unit.FacingDeg, anchor.Key))
 	case ActionAboutFace:
-		unit.FacingDeg = normalizeDeg(unit.FacingDeg + 180)
-		reverseMinis(unit)
+		if err := applyAboutFace(unit); err != nil {
+			return nil, err
+		}
 		messages = append(messages, "About face completed.")
 	default:
 		return nil, errors.New("unsupported phase 1 action")
@@ -320,19 +321,75 @@ func miniCenterY(mini Mini) float64 {
 	return mini.RelY + float64(mini.DepthMM)/2
 }
 
-func reverseMinis(unit *Unit) {
+func applyAboutFace(unit *Unit) error {
 	count := len(unit.Minis)
-	frontRankCount := min(count, unit.Base.PerRank)
-	newOfficerFile := max(0, (frontRankCount-1)/2)
+	officerIndex := -1
 	for i := range unit.Minis {
-		rank := i / unit.Base.PerRank
-		file := i % unit.Base.PerRank
-		unit.Minis[i].Rank = rank
-		unit.Minis[i].File = file
-		unit.Minis[i].RelX = float64(file * unit.Base.WidthMM)
-		unit.Minis[i].RelY = float64(rank * unit.Base.DepthMM)
-		unit.Minis[i].IsOfficer = rank == 0 && file == newOfficerFile
+		if unit.Minis[i].IsOfficer {
+			officerIndex = i
+			break
+		}
 	}
+	if officerIndex < 0 {
+		return errors.New("unit has no officer for about face")
+	}
+
+	perRank := unit.Base.PerRank
+	fullRanks := count / perRank
+	if fullRanks == 0 {
+		fullRanks = 1
+	}
+	lastFullRank := fullRanks - 1
+	officerFile := unit.Minis[officerIndex].File
+	swapIndex := officerIndex
+	for i := range unit.Minis {
+		if unit.Minis[i].Rank == lastFullRank && unit.Minis[i].File == officerFile {
+			swapIndex = i
+			break
+		}
+	}
+	swapMiniPositions(&unit.Minis[officerIndex], &unit.Minis[swapIndex])
+	fixedX, fixedY := miniWorldCenter(*unit, unit.Minis[officerIndex], unit.FacingDeg)
+
+	for i := range unit.Minis {
+		oldRank := unit.Minis[i].Rank
+		if oldRank < fullRanks {
+			unit.Minis[i].Rank = fullRanks - 1 - oldRank
+		} else {
+			unit.Minis[i].Rank = fullRanks + (oldRank - fullRanks)
+		}
+		setMiniPosition(unit, i, unit.Minis[i].Rank, unit.Minis[i].File)
+	}
+
+	nextFacing := normalizeDeg(unit.FacingDeg + 180)
+	relX, relY := rotatePoint(miniCenterX(unit.Minis[officerIndex]), miniCenterY(unit.Minis[officerIndex]), nextFacing)
+	unit.X = fixedX - relX
+	unit.Y = fixedY - relY
+	unit.FacingDeg = nextFacing
+	return nil
+}
+
+func swapMiniPositions(a, b *Mini) {
+	a.Rank, b.Rank = b.Rank, a.Rank
+	a.File, b.File = b.File, a.File
+	a.RelX, b.RelX = b.RelX, a.RelX
+	a.RelY, b.RelY = b.RelY, a.RelY
+}
+
+func setMiniPosition(unit *Unit, index, rank, file int) {
+	unit.Minis[index].Rank = rank
+	unit.Minis[index].File = file
+	unit.Minis[index].RelX = float64(file * unit.Base.WidthMM)
+	unit.Minis[index].RelY = float64(rank * unit.Base.DepthMM)
+}
+
+func miniByKey(unit *Unit, key string) (Mini, bool) {
+	for _, mini := range unit.Minis {
+		if mini.Key == key {
+			return mini, true
+		}
+	}
+	return Mini{}, false
 }
 
 func unitActivatedThisRound(g *Game, unitID string) bool {

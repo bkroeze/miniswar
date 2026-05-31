@@ -205,16 +205,28 @@ func TestLegalActionsDoesNotExposeWheel(t *testing.T) {
 	}
 }
 
-func TestAboutFaceKeepsOneOfficerAndNoOverlaps(t *testing.T) {
+func TestAboutFaceSwapsOfficerWithLastFullRankAndKeepsPartialRankBack(t *testing.T) {
 	engine := NewEngine(4)
 	g, err := engine.NewGame(Setup{
-		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 7},
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 12},
 		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	unit := g.Units[g.ActivePlayer-1]
+	unit := &g.Units[0]
+	officer, ok := miniByKey(unit, "p1-u1-m03")
+	if !ok {
+		t.Fatal("missing officer mini")
+	}
+	swapTarget, ok := miniByKey(unit, "p1-u1-m08")
+	if !ok {
+		t.Fatal("missing last-full-rank target")
+	}
+	if !officer.IsOfficer || swapTarget.IsOfficer {
+		t.Fatal("unexpected initial officer assignment")
+	}
+	expectedOfficerX, expectedOfficerY := miniWorldCenter(*unit, swapTarget, unit.FacingDeg)
 	g.CurrentActivation = &Activation{UnitID: unit.ID, PlayerID: unit.PlayerID, Success: true, ActionsRemaining: 1}
 	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: unit.PlayerID, UnitID: unit.ID, Type: ActionAboutFace}); err != nil {
 		t.Fatal(err)
@@ -237,5 +249,25 @@ func TestAboutFaceKeepsOneOfficerAndNoOverlaps(t *testing.T) {
 	}
 	if officers != 1 {
 		t.Fatalf("got %d officers", officers)
+	}
+	officer, _ = miniByKey(updated, "p1-u1-m03")
+	if !officer.IsOfficer || officer.Rank != 0 || officer.File != 2 {
+		t.Fatalf("officer not in new front rank same file: %+v", officer)
+	}
+	officerX, officerY := miniWorldCenter(*updated, officer, updated.FacingDeg)
+	if mathRound(officerX) != mathRound(expectedOfficerX) || mathRound(officerY) != mathRound(expectedOfficerY) {
+		t.Fatalf("officer did not pivot from swapped position: got (%v,%v), want (%v,%v)", officerX, officerY, expectedOfficerX, expectedOfficerY)
+	}
+	oldOfficerPlaceMini, _ := miniByKey(updated, "p1-u1-m08")
+	if oldOfficerPlaceMini.Rank != 1 || oldOfficerPlaceMini.File != 2 {
+		t.Fatalf("swap target did not move into old officer row: %+v", oldOfficerPlaceMini)
+	}
+	partialA, _ := miniByKey(updated, "p1-u1-m11")
+	partialB, _ := miniByKey(updated, "p1-u1-m12")
+	if partialA.Rank != 2 || partialA.File != 0 || partialB.Rank != 2 || partialB.File != 1 {
+		t.Fatalf("partial rank not left-flushed at back: %+v %+v", partialA, partialB)
+	}
+	if updated.FacingDeg != 180 {
+		t.Fatalf("got facing %d", updated.FacingDeg)
 	}
 }

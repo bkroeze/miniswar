@@ -117,7 +117,7 @@ func TestCompassFacingMovement(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			unit := Unit{X: 100, Y: 100, FacingDeg: tc.facing, MovementLimitMM: MovementLimitMM}
 			act := &Activation{}
-			_, err := applyMove(&unit, act, ActionRequest{Type: ActionMove, Direction: "forward", DistanceMM: 20}, nil)
+			_, err := applyMove(&unit, act, ActionRequest{Type: ActionMove, Direction: "forward", DistanceMM: 20}, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -215,6 +215,25 @@ func TestPlaceUnitRejectsImpassableTerrain(t *testing.T) {
 	}
 }
 
+func TestPlaceUnitRejectsOtherUnitOverlap(t *testing.T) {
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.ActivePlayer = 1
+	if _, err := engine.PlaceUnit(g, PlacementRequest{PlayerID: 1, UnitID: "u1", X: 200, Y: 200}); err != nil {
+		t.Fatal(err)
+	}
+	g.ActivePlayer = 2
+	if _, err := engine.PlaceUnit(g, PlacementRequest{PlayerID: 2, UnitID: "u2", X: 200, Y: 200}); err == nil {
+		t.Fatal("expected placement overlap error")
+	}
+}
+
 func TestPlaceUnitAcceptsExplicitFacing(t *testing.T) {
 	engine := NewEngine(1)
 	g, err := engine.NewGame(Setup{
@@ -250,7 +269,7 @@ func TestMovementThroughRoughTerrainHalvesOnlyOverlappingDistance(t *testing.T) 
 	}
 	moved, err := applyMove(&unit, &Activation{}, ActionRequest{Direction: "forward", DistanceMM: 100}, []TerrainZone{
 		{ID: "rough", Type: TerrainRough, Shape: "rect", X: -10, Y: -200, Width: 50, Height: 250},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,12 +293,99 @@ func TestMovementStopsBeforeImpassableOverlap(t *testing.T) {
 	}
 	moved, err := applyMove(&unit, &Activation{}, ActionRequest{Direction: "forward", DistanceMM: 100}, []TerrainZone{
 		{ID: "wall", Type: TerrainImpassable, Shape: "rect", X: -10, Y: -200, Width: 50, Height: 250},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if moved != 50 || unit.Y != 50 {
 		t.Fatalf("got moved %.0f y %.0f, want moved 50 y 50", moved, unit.Y)
+	}
+}
+
+func TestMovementMayPassThroughFriendlyUnitWhenItClears(t *testing.T) {
+	unit := oneMiniUnit("u1", 1, 0, 100, 0)
+	friendly := oneMiniUnit("u2", 1, 0, 50, 0)
+	moved, err := applyMove(&unit, &Activation{}, ActionRequest{Direction: "forward", DistanceMM: 100}, nil, []Unit{unit, friendly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved != 100 || unit.Y != 0 {
+		t.Fatalf("got moved %.0f y %.0f, want moved 100 y 0", moved, unit.Y)
+	}
+}
+
+func TestMovementStopsBeforeFriendlyUnitWhenItCannotClear(t *testing.T) {
+	unit := oneMiniUnit("u1", 1, 0, 100, 0)
+	friendly := oneMiniUnit("u2", 1, 0, 50, 0)
+	moved, err := applyMove(&unit, &Activation{}, ActionRequest{Direction: "forward", DistanceMM: 60}, nil, []Unit{unit, friendly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved != 25 || unit.Y != 75 {
+		t.Fatalf("got moved %.0f y %.0f, want moved 25 y 75", moved, unit.Y)
+	}
+}
+
+func TestMovementStopsBeforeEnemyUnit(t *testing.T) {
+	unit := oneMiniUnit("u1", 1, 0, 100, 0)
+	enemy := oneMiniUnit("u2", 2, 0, 50, 0)
+	moved, err := applyMove(&unit, &Activation{}, ActionRequest{Direction: "forward", DistanceMM: 100}, nil, []Unit{unit, enemy})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved != 25 || unit.Y != 75 {
+		t.Fatalf("got moved %.0f y %.0f, want moved 25 y 75", moved, unit.Y)
+	}
+}
+
+func TestEastFacingFriendlyUnitStopsBeforeWestmostExtentWhenItCannotClear(t *testing.T) {
+	unit := formationUnit("u1", 1, 100, 100, 90, 10)
+	friendly := formationUnit("u2", 1, 200, 100, 90, 10)
+	moved, err := applyMove(&unit, &Activation{}, ActionRequest{Direction: "forward", DistanceMM: 60}, nil, []Unit{unit, friendly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved != 50 || unit.X != 150 {
+		t.Fatalf("got moved %.0f x %.0f, want moved 50 x 150", moved, unit.X)
+	}
+}
+
+func TestEastFacingFriendlyUnitMayPassThroughWhenItClears(t *testing.T) {
+	unit := formationUnit("u1", 1, 125, 100, 90, 5)
+	friendly := formationUnit("u2", 1, 175, 100, 90, 5)
+	moved, err := applyMove(&unit, &Activation{}, ActionRequest{Direction: "forward", DistanceMM: 75}, nil, []Unit{unit, friendly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved != 75 || unit.X != 200 {
+		t.Fatalf("got moved %.0f x %.0f, want moved 75 x 200", moved, unit.X)
+	}
+}
+
+func TestEngineMoveNeverLeavesUnitOverlappingFriendlyUnit(t *testing.T) {
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{
+		Player1Units: []UnitSetup{
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 10},
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 10},
+		},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Units[0] = formationUnit("u1", 1, 100, 250, 90, 10)
+	g.Units[1] = formationUnit("p1-u2", 1, 200, 250, 90, 10)
+	g.Units[2] = formationUnit("u2", 2, 600, 250, 270, 5)
+	g.Phase = "awaiting_activation"
+	g.ActivePlayer = 1
+	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 1}
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionMove, Direction: "forward", DistanceMM: 100}); err != nil {
+		t.Fatal(err)
+	}
+	moved, _ := findUnit(g, "u1")
+	if unitOverlapsAnyUnit(*moved, moved.X, moved.Y, g.Units) {
+		t.Fatalf("move left unit overlapping another unit at x=%v y=%v", moved.X, moved.Y)
 	}
 }
 
@@ -542,6 +648,39 @@ func placeDefaultUnits(g *Game) {
 	}
 	g.Phase = "awaiting_activation"
 	g.ActivePlayer = g.FirstPlayer
+}
+
+func oneMiniUnit(id string, playerID int, x, y float64, facing int) Unit {
+	return Unit{
+		ID:              id,
+		PlayerID:        playerID,
+		MovementLimitMM: MovementLimitMM,
+		X:               x,
+		Y:               y,
+		FacingDeg:       facing,
+		Placed:          true,
+		Minis: []Mini{{
+			Key:     id + "-m1",
+			WidthMM: 25,
+			DepthMM: 25,
+		}},
+	}
+}
+
+func formationUnit(id string, playerID int, x, y float64, facing, count int) Unit {
+	base, _ := Base(25, 25)
+	unit := Unit{
+		ID:              id,
+		PlayerID:        playerID,
+		Base:            base,
+		MovementLimitMM: MovementLimitMM,
+		X:               x,
+		Y:               y,
+		FacingDeg:       facing,
+		Placed:          true,
+	}
+	unit.Minis = layoutMinis(unit, count)
+	return unit
 }
 
 func finishActivation(t *testing.T, engine *Engine, g *Game, unitID string, playerID int) {

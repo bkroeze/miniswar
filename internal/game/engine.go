@@ -218,6 +218,10 @@ func (e *Engine) PlaceUnit(g *Game, req PlacementRequest) (*ActionRecord, error)
 		unit.Placed = false
 		return nil, errors.New("placement overlaps impassable terrain")
 	}
+	if unitOverlapsAnyUnit(*unit, unit.X, unit.Y, g.Units) {
+		unit.Placed = false
+		return nil, errors.New("placement overlaps another unit")
+	}
 	if !unitInsideArena(*unit, unit.X, unit.Y) {
 		unit.Placed = false
 		return nil, errors.New("placement must keep the whole unit in the arena")
@@ -299,7 +303,7 @@ func (e *Engine) ApplyAction(g *Game, req ActionRequest) (*ActionRecord, error) 
 	var messages []string
 	switch req.Type {
 	case ActionMove:
-		moved, err := applyMove(unit, act, req, g.Battlemap.Terrains)
+		moved, err := applyMove(unit, act, req, g.Battlemap.Terrains, g.Units)
 		if err != nil {
 			return nil, err
 		}
@@ -333,7 +337,7 @@ func (e *Engine) ApplyAction(g *Game, req ActionRequest) (*ActionRecord, error) 
 	return &rec, nil
 }
 
-func applyMove(unit *Unit, act *Activation, req ActionRequest, terrains []TerrainZone) (float64, error) {
+func applyMove(unit *Unit, act *Activation, req ActionRequest, terrains []TerrainZone, units []Unit) (float64, error) {
 	if req.Direction != "forward" && req.Direction != "backward" {
 		return 0, errors.New("move direction must be forward or backward")
 	}
@@ -354,13 +358,15 @@ func applyMove(unit *Unit, act *Activation, req ActionRequest, terrains []Terrai
 	rad := float64(unit.FacingDeg) * math.Pi / 180
 	dx := math.Sin(rad) * sign
 	dy := -math.Cos(rad) * sign
+	startX := unit.X
+	startY := unit.Y
 	remaining := limit
 	moved := 0.0
 	for moved < req.DistanceMM && remaining > 0 {
 		step := minFloat(1, req.DistanceMM-moved)
 		nextX := unit.X + dx*step
 		nextY := unit.Y + dy*step
-		if unitOverlapsTerrain(*unit, nextX, nextY, terrains, TerrainImpassable) {
+		if unitOverlapsTerrain(*unit, nextX, nextY, terrains, TerrainImpassable) || unitOverlapsEnemyUnit(*unit, nextX, nextY, units) {
 			break
 		}
 		cost := step
@@ -374,6 +380,14 @@ func applyMove(unit *Unit, act *Activation, req ActionRequest, terrains []Terrai
 		unit.Y = nextY
 		moved += step
 		remaining -= cost
+	}
+	if unitOverlapsFriendlyUnit(*unit, unit.X, unit.Y, units) {
+		moved = revertToBeforeFriendlyOverlap(unit, req, terrains, units, startX, startY, moved)
+	}
+	if unitOverlapsAnyUnit(*unit, unit.X, unit.Y, units) {
+		unit.X = startX
+		unit.Y = startY
+		return 0, nil
 	}
 	return moved, nil
 }
@@ -547,6 +561,134 @@ func unitBoundsAt(unit Unit, x, y float64) rectBounds {
 
 func rectsOverlap(a, b rectBounds) bool {
 	return a.minX < b.maxX && a.maxX > b.minX && a.minY < b.maxY && a.maxY > b.minY
+}
+
+func unitOverlapsEnemyUnit(unit Unit, x, y float64, units []Unit) bool {
+	return unitOverlapsOtherUnit(unit, x, y, units, false)
+}
+
+func unitOverlapsFriendlyUnit(unit Unit, x, y float64, units []Unit) bool {
+	return unitOverlapsOtherUnit(unit, x, y, units, true)
+}
+
+func unitOverlapsAnyUnit(unit Unit, x, y float64, units []Unit) bool {
+	for _, other := range units {
+		if other.ID == unit.ID || !other.Placed {
+			continue
+		}
+		if unitsMiniRectsOverlap(unit, x, y, other) {
+			return true
+		}
+	}
+	return false
+}
+
+func unitOverlapsOtherUnit(unit Unit, x, y float64, units []Unit, friendly bool) bool {
+	for _, other := range units {
+		if other.ID == unit.ID || !other.Placed {
+			continue
+		}
+		if (other.PlayerID == unit.PlayerID) != friendly {
+			continue
+		}
+		if unitsMiniRectsOverlap(unit, x, y, other) {
+			return true
+		}
+	}
+	return false
+}
+
+func unitsMiniRectsOverlap(unit Unit, x, y float64, other Unit) bool {
+	for _, mini := range unit.Minis {
+		poly := miniWorldPolygon(unit, mini, x, y)
+		for _, otherMini := range other.Minis {
+			if polygonsOverlap(poly, miniWorldPolygon(other, otherMini, other.X, other.Y)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func miniWorldPolygon(unit Unit, mini Mini, unitX, unitY float64) [4][2]float64 {
+	corners := [4][2]float64{
+		{mini.RelX, mini.RelY},
+		{mini.RelX + float64(mini.WidthMM), mini.RelY},
+		{mini.RelX + float64(mini.WidthMM), mini.RelY + float64(mini.DepthMM)},
+		{mini.RelX, mini.RelY + float64(mini.DepthMM)},
+	}
+	for i, corner := range corners {
+		x, y := rotatePoint(corner[0], corner[1], unit.FacingDeg)
+		corners[i] = [2]float64{unitX + x, unitY + y}
+	}
+	return corners
+}
+
+func polygonsOverlap(a, b [4][2]float64) bool {
+	for _, poly := range [][4][2]float64{a, b} {
+		for i := 0; i < len(poly); i++ {
+			next := (i + 1) % len(poly)
+			edgeX := poly[next][0] - poly[i][0]
+			edgeY := poly[next][1] - poly[i][1]
+			axisX := -edgeY
+			axisY := edgeX
+			minA, maxA := projectPolygon(a, axisX, axisY)
+			minB, maxB := projectPolygon(b, axisX, axisY)
+			if maxA <= minB || maxB <= minA {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func projectPolygon(poly [4][2]float64, axisX, axisY float64) (float64, float64) {
+	minProjection := poly[0][0]*axisX + poly[0][1]*axisY
+	maxProjection := minProjection
+	for i := 1; i < len(poly); i++ {
+		projection := poly[i][0]*axisX + poly[i][1]*axisY
+		minProjection = math.Min(minProjection, projection)
+		maxProjection = math.Max(maxProjection, projection)
+	}
+	return minProjection, maxProjection
+}
+
+func revertToBeforeFriendlyOverlap(unit *Unit, req ActionRequest, terrains []TerrainZone, units []Unit, startX, startY, maxMoved float64) float64 {
+	sign := 1.0
+	if req.Direction == "backward" {
+		sign = -1
+	}
+	rad := float64(unit.FacingDeg) * math.Pi / 180
+	dx := math.Sin(rad) * sign
+	dy := -math.Cos(rad) * sign
+	lastClearX := startX
+	lastClearY := startY
+	lastClearMoved := 0.0
+	inFriendly := false
+	for moved := 0.0; moved < maxMoved; {
+		step := minFloat(1, maxMoved-moved)
+		nextMoved := moved + step
+		nextX := startX + dx*nextMoved
+		nextY := startY + dy*nextMoved
+		if unitOverlapsTerrain(*unit, nextX, nextY, terrains, TerrainImpassable) || unitOverlapsEnemyUnit(*unit, nextX, nextY, units) {
+			break
+		}
+		if unitOverlapsFriendlyUnit(*unit, nextX, nextY, units) {
+			inFriendly = true
+		} else {
+			inFriendly = false
+			lastClearX = nextX
+			lastClearY = nextY
+			lastClearMoved = nextMoved
+		}
+		moved = nextMoved
+	}
+	if inFriendly {
+		unit.X = lastClearX
+		unit.Y = lastClearY
+		return lastClearMoved
+	}
+	return maxMoved
 }
 
 func unitInsideArena(unit Unit, x, y float64) bool {

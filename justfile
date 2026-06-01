@@ -19,6 +19,9 @@ check: test build
 run:
     GOCACHE={{gocache}} GOMODCACHE={{gomodcache}} go run -buildvcs=false ./cmd/miniswar -addr {{addr}} -db {{db}}
 
+run-local port:
+    GOCACHE={{gocache}} GOMODCACHE={{gomodcache}} go run -buildvcs=false ./cmd/miniswar -addr 10.0.10.23:{{port}} -db /tmp/miniswar-{{port}}.sqlite
+
 run-port port:
     GOCACHE={{gocache}} GOMODCACHE={{gomodcache}} go run -buildvcs=false ./cmd/miniswar -addr 127.0.0.1:{{port}} -db /tmp/miniswar-{{port}}.sqlite
 

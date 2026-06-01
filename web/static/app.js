@@ -5,6 +5,7 @@ function createMiniswarApp() {
     selectedMini: "",
     messages: [],
     placementPreview: null,
+    setupSidebarCollapsed: false,
     setup: {
       battlemapId: "old_road",
       player1: { base: "25x25", count: 12, units: [{ base: "25x25", count: 12 }] },
@@ -15,6 +16,10 @@ function createMiniswarApp() {
 
     isSetupPhase() {
       return this.game?.phase === "setup";
+    },
+
+    toggleSetupSidebar() {
+      this.setupSidebarCollapsed = !this.setupSidebarCollapsed;
     },
 
     setupPayload() {

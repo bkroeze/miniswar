@@ -90,10 +90,19 @@ h3 {
   grid-template-columns: 280px minmax(360px, 1fr) 330px;
   gap: 1rem;
   padding: 1rem;
+  transition: grid-template-columns 140ms ease;
 }
 
 .shell.setup-active {
   grid-template-columns: 280px minmax(360px, 1fr);
+}
+
+.shell.setup-collapsed {
+  grid-template-columns: 28px minmax(360px, 1fr) 330px;
+}
+
+.shell.setup-active.setup-collapsed {
+  grid-template-columns: 28px minmax(360px, 1fr);
 }
 
 .shell.setup-active .controls {
@@ -104,6 +113,39 @@ h3 {
 .controls {
   border-left: 3px solid var(--line);
   padding-left: 0.85rem;
+}
+
+.setup {
+  position: relative;
+  min-width: 0;
+}
+
+.shell.setup-collapsed .setup {
+  padding-left: 0;
+  border-left-color: transparent;
+}
+
+.setup-body {
+  min-width: 0;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  top: 0;
+  right: -0.65rem;
+  z-index: 3;
+  width: 1.55rem;
+  height: 2.1rem;
+  padding: 0;
+  border-color: var(--line);
+  background: #fffdf8;
+  color: var(--ink);
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.shell.setup-collapsed .sidebar-toggle {
+  right: -1.2rem;
 }
 
 .setup-disclosure {

@@ -17,8 +17,12 @@
     <button type="button" @click="createGame()">New Game</button>
   </header>
 
-  <main class="shell" :class="{ 'setup-active': isSetupPhase() }">
-    <section class="setup">
+  <main class="shell" :class="{ 'setup-active': isSetupPhase(), 'setup-collapsed': setupSidebarCollapsed }">
+    <section class="setup" :aria-label="setupSidebarCollapsed ? 'Setup collapsed' : 'Setup'">
+      <button class="sidebar-toggle" type="button" @click="toggleSetupSidebar()" :aria-expanded="(!setupSidebarCollapsed).toString()" aria-controls="setup-sidebar-body">
+        <span x-text="setupSidebarCollapsed ? '›' : '‹'"></span>
+      </button>
+      <div id="setup-sidebar-body" class="setup-body" x-show="!setupSidebarCollapsed">
       <details class="setup-disclosure">
         <summary>New Game Configuration</summary>
         <label>Battlemap
@@ -76,6 +80,7 @@
           </div>
         </div>
       </details>
+      </div>
     </section>
 
     <section class="arena-panel">
@@ -122,6 +127,7 @@
         </label>
         <button type="button" @click="takeAction('pivot')" :disabled="!canAct()">Pivot</button>
         <button type="button" @click="takeAction('about_face')" :disabled="!canAct()">About Face</button>
+        <button type="button" @click="takeAction('skip')" :disabled="!canAct()">Skip</button>
       </div>
 
       <h2>Feedback</h2>

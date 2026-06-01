@@ -8,6 +8,7 @@ const (
 	ActionMove      = "move"
 	ActionPivot     = "pivot"
 	ActionAboutFace = "about_face"
+	ActionSkip      = "skip"
 
 	MovementLimitMM = 100
 	ArenaWidthMM    = 760

@@ -320,6 +320,10 @@ func (e *Engine) ApplyAction(g *Game, req ActionRequest) (*ActionRecord, error) 
 			return nil, err
 		}
 		messages = append(messages, "About face completed.")
+	case ActionSkip:
+		skipped := act.ActionsRemaining
+		act.ActionsRemaining = 1
+		messages = append(messages, fmt.Sprintf("Skipped %d remaining action(s).", skipped))
 	default:
 		return nil, errors.New("unsupported phase 1 action")
 	}
@@ -456,7 +460,7 @@ func LegalActions(g *Game) []string {
 	if g.CurrentActivation == nil {
 		return []string{ActionActivate}
 	}
-	return []string{ActionMove, ActionPivot, ActionAboutFace}
+	return []string{ActionMove, ActionPivot, ActionAboutFace, ActionSkip}
 }
 
 func placementUnitID(g *Game) (string, bool) {

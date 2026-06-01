@@ -409,6 +409,33 @@ func TestSecondMoveLimit(t *testing.T) {
 	}
 }
 
+func TestSkipUsesAllRemainingActionsAndAdvancesTurn(t *testing.T) {
+	engine := NewEngine(9)
+	g, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	placeDefaultUnits(g)
+	g.ActivePlayer = 1
+	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 2}
+	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionSkip})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Type != ActionSkip {
+		t.Fatalf("got action %s", rec.Type)
+	}
+	if g.CurrentActivation != nil {
+		t.Fatal("skip should end the current activation")
+	}
+	if g.ActivePlayer != 2 || g.Phase != "awaiting_activation" {
+		t.Fatalf("got active player %d phase %q", g.ActivePlayer, g.Phase)
+	}
+}
+
 func TestPivotDefaultsToOfficerAsFixedAxis(t *testing.T) {
 	engine := NewEngine(5)
 	g, err := engine.NewGame(Setup{
@@ -463,10 +490,17 @@ func TestPivotUsesSelectedAnchorAsFixedAxis(t *testing.T) {
 
 func TestLegalActionsDoesNotExposeWheel(t *testing.T) {
 	g := &Game{CurrentActivation: &Activation{UnitID: "u1"}}
+	foundSkip := false
 	for _, action := range LegalActions(g) {
 		if action == "wheel" {
 			t.Fatal("wheel should not be a separate legal action")
 		}
+		if action == ActionSkip {
+			foundSkip = true
+		}
+	}
+	if !foundSkip {
+		t.Fatal("skip should be legal during activation")
 	}
 }
 

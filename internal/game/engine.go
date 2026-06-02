@@ -68,6 +68,8 @@ func Base(width, depth int) (BaseSize, bool) {
 		return BaseSize{WidthMM: 50, DepthMM: 50, MaxMinis: 3, PerRank: 3}, true
 	case width == 50 && depth == 100:
 		return BaseSize{WidthMM: 50, DepthMM: 100, MaxMinis: 1, PerRank: 1}, true
+	case width == 100 && depth == 50:
+		return BaseSize{WidthMM: 100, DepthMM: 50, MaxMinis: 1, PerRank: 1}, true
 	default:
 		return BaseSize{}, false
 	}
@@ -91,14 +93,22 @@ func (e *Engine) NewGame(setup Setup) (*Game, error) {
 	}
 	units := make([]Unit, 0, len(p1Setups)+len(p2Setups))
 	for i, unitSetup := range p1Setups {
-		unit, err := newUnit(1, playerUnitID(1, i), fmt.Sprintf("Player 1 Unit %d", i+1), unitSetup, 5, 0, 0, 0)
+		name := unitSetup.Name
+		if name == "" {
+			name = fmt.Sprintf("Player 1 Unit %d", i+1)
+		}
+		unit, err := newUnit(1, playerUnitID(1, i), name, unitSetup, 5, 0, 0, 0)
 		if err != nil {
 			return nil, fmt.Errorf("player1 unit %d: %w", i+1, err)
 		}
 		units = append(units, unit)
 	}
 	for i, unitSetup := range p2Setups {
-		unit, err := newUnit(2, playerUnitID(2, i), fmt.Sprintf("Player 2 Unit %d", i+1), unitSetup, 4, 0, 0, 180)
+		name := unitSetup.Name
+		if name == "" {
+			name = fmt.Sprintf("Player 2 Unit %d", i+1)
+		}
+		unit, err := newUnit(2, playerUnitID(2, i), name, unitSetup, 4, 0, 0, 180)
 		if err != nil {
 			return nil, fmt.Errorf("player2 unit %d: %w", i+1, err)
 		}
@@ -139,13 +149,19 @@ func newUnit(player int, id, name string, setup UnitSetup, activation, x, y, fac
 	if setup.Count < 1 || setup.Count > base.MaxMinis {
 		return Unit{}, fmt.Errorf("count must be between 1 and %d", base.MaxMinis)
 	}
-	if base.WidthMM == 50 && base.DepthMM == 100 && setup.Count != 1 {
-		return Unit{}, errors.New("50x100mm bases must be a unit of 1")
+	if ((base.WidthMM == 50 && base.DepthMM == 100) || (base.WidthMM == 100 && base.DepthMM == 50)) && setup.Count != 1 {
+		return Unit{}, errors.New("large artillery and monster bases must be a unit of 1")
 	}
 	unit := Unit{
 		ID:               id,
 		PlayerID:         player,
 		Name:             name,
+		CatalogUnitID:    setup.CatalogUnitID,
+		ArmyID:           setup.ArmyID,
+		ArmyUnitID:       setup.ArmyUnitID,
+		MaxHealth:        setup.MaxHealth,
+		CurrentHealth:    setup.CurrentHealth,
+		Stats:            setup.Stats,
 		Base:             base,
 		ActivationNumber: activation,
 		MovementLimitMM:  MovementLimitMM,

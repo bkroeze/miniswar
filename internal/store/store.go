@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	"miniswar/internal/game"
@@ -22,6 +24,10 @@ func Open(path string) (*Store, error) {
 	}
 	s := &Store{db: db}
 	if err := s.migrate(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := s.ImportCatalog(projectPath("data/units.json")); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -46,6 +52,69 @@ create table if not exists snapshots (
   state_json text not null,
   created_at text not null,
   primary key (game_id, action_index)
+);
+create table if not exists catalog_units (
+  id text primary key,
+  unit_name text not null,
+  nation text not null,
+  a integer not null,
+  m integer not null,
+  f integer not null,
+  s integer not null,
+  d integer not null,
+  cd integer not null,
+  h integer not null,
+  pts integer not null,
+  base text not null,
+  base_width_mm integer not null,
+  base_depth_mm integer not null,
+  special_json text not null,
+  equipment_json text not null,
+  source_hash text not null,
+  created_at text not null,
+  updated_at text not null
+);
+create table if not exists catalog_unit_terrains (
+  unit_id text not null references catalog_units(id) on delete cascade,
+  terrain text not null,
+  primary key (unit_id, terrain)
+);
+create table if not exists army_templates (
+  id text primary key,
+  name text not null,
+  target_points integer not null default 0,
+  created_at text not null,
+  updated_at text not null
+);
+create table if not exists army_template_units (
+  id text primary key,
+  template_id text not null references army_templates(id) on delete cascade,
+  catalog_unit_id text not null references catalog_units(id),
+  default_moniker text not null,
+  mini_count integer not null,
+  sort_order integer not null,
+  created_at text not null,
+  updated_at text not null
+);
+create table if not exists armies (
+  id text primary key,
+  template_id text references army_templates(id),
+  name text not null,
+  target_points integer not null default 0,
+  created_at text not null,
+  updated_at text not null
+);
+create table if not exists army_units (
+  id text primary key,
+  army_id text not null references armies(id) on delete cascade,
+  catalog_unit_id text not null references catalog_units(id),
+  moniker text not null,
+  mini_count integer not null,
+  max_health integer not null,
+  current_health integer not null,
+  sort_order integer not null,
+  created_at text not null,
+  updated_at text not null
 );`)
 	return err
 }
@@ -122,6 +191,14 @@ order by g.updated_at desc`)
 		})
 	}
 	return out, rows.Err()
+}
+
+func projectPath(path string) string {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return path
+	}
+	return filepath.Join(filepath.Dir(file), "..", "..", path)
 }
 
 func (s *Store) SaveSnapshot(gameID string, actionIndex int, state string) error {

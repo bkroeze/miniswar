@@ -15,6 +15,7 @@
       <p x-text="statusLine()"></p>
     </div>
     <div class="topbar-actions">
+      <a class="button-link" href="/armies">Armies</a>
       <button type="button" @click="openLoadGames()">Load Game</button>
       <button type="button" @click="createGame()">New Game</button>
     </div>
@@ -37,19 +38,15 @@
         <div class="setup-grid">
           <div class="setup-player">
             <h3>Player 1</h3>
-            <label>Base
-              <select x-model="setup.player1.base">
-                <option value="25x25">25x25</option>
-                <option value="25x50">25x50</option>
-                <option value="50x50">50x50</option>
-                <option value="50x100">50x100</option>
+            <label>Army
+              <select x-model="setup.player1ArmyId">
+                <option value="">Manual fallback</option>
+                <template x-for="army in armies" :key="`p1-${army.id}`">
+                  <option :value="army.id" x-text="`${army.name} (${army.totalPoints}/${army.targetPoints || 0} pts)`"></option>
+                </template>
               </select>
             </label>
-            <label>Minis
-              <input type="number" min="1" max="20" x-model.number="setup.player1.count">
-            </label>
-            <button type="button" @click="addSetupUnit(1)">Add P1 Unit</button>
-            <ol class="setup-units">
+            <ol class="setup-units" x-show="!setup.player1ArmyId">
               <template x-for="(unit, index) in setup.player1.units" :key="`p1-${index}`">
                 <li>
                   <span x-text="`${unit.count} minis on ${unit.base}`"></span>
@@ -60,19 +57,15 @@
           </div>
           <div class="setup-player">
             <h3>Player 2</h3>
-            <label>Base
-              <select x-model="setup.player2.base">
-                <option value="25x25">25x25</option>
-                <option value="25x50">25x50</option>
-                <option value="50x50">50x50</option>
-                <option value="50x100">50x100</option>
+            <label>Army
+              <select x-model="setup.player2ArmyId">
+                <option value="">Manual fallback</option>
+                <template x-for="army in armies" :key="`p2-${army.id}`">
+                  <option :value="army.id" x-text="`${army.name} (${army.totalPoints}/${army.targetPoints || 0} pts)`"></option>
+                </template>
               </select>
             </label>
-            <label>Minis
-              <input type="number" min="1" max="20" x-model.number="setup.player2.count">
-            </label>
-            <button type="button" @click="addSetupUnit(2)">Add P2 Unit</button>
-            <ol class="setup-units">
+            <ol class="setup-units" x-show="!setup.player2ArmyId">
               <template x-for="(unit, index) in setup.player2.units" :key="`p2-${index}`">
                 <li>
                   <span x-text="`${unit.count} minis on ${unit.base}`"></span>

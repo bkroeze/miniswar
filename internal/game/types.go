@@ -27,17 +27,37 @@ type BaseSize struct {
 }
 
 type Setup struct {
-	Player1      UnitSetup   `json:"player1"`
-	Player2      UnitSetup   `json:"player2"`
-	Player1Units []UnitSetup `json:"player1Units,omitempty"`
-	Player2Units []UnitSetup `json:"player2Units,omitempty"`
-	BattlemapID  string      `json:"battlemapId,omitempty"`
+	Player1       UnitSetup   `json:"player1"`
+	Player2       UnitSetup   `json:"player2"`
+	Player1Units  []UnitSetup `json:"player1Units,omitempty"`
+	Player2Units  []UnitSetup `json:"player2Units,omitempty"`
+	Player1ArmyID string      `json:"player1ArmyId,omitempty"`
+	Player2ArmyID string      `json:"player2ArmyId,omitempty"`
+	BattlemapID   string      `json:"battlemapId,omitempty"`
 }
 
 type UnitSetup struct {
-	BaseWidthMM int `json:"baseWidthMm"`
-	BaseDepthMM int `json:"baseDepthMm"`
-	Count       int `json:"count"`
+	BaseWidthMM   int       `json:"baseWidthMm"`
+	BaseDepthMM   int       `json:"baseDepthMm"`
+	Count         int       `json:"count"`
+	Name          string    `json:"name,omitempty"`
+	CatalogUnitID string    `json:"catalogUnitId,omitempty"`
+	ArmyID        string    `json:"armyId,omitempty"`
+	ArmyUnitID    string    `json:"armyUnitId,omitempty"`
+	MaxHealth     int       `json:"maxHealth,omitempty"`
+	CurrentHealth int       `json:"currentHealth,omitempty"`
+	Stats         UnitStats `json:"stats,omitempty"`
+}
+
+type UnitStats struct {
+	A   int `json:"a"`
+	M   int `json:"m"`
+	F   int `json:"f"`
+	S   int `json:"s"`
+	D   int `json:"d"`
+	CD  int `json:"cd"`
+	H   int `json:"h"`
+	Pts int `json:"pts"`
 }
 
 type Game struct {
@@ -75,17 +95,23 @@ type TerrainZone struct {
 }
 
 type Unit struct {
-	ID               string   `json:"id"`
-	PlayerID         int      `json:"playerId"`
-	Name             string   `json:"name"`
-	Base             BaseSize `json:"base"`
-	ActivationNumber int      `json:"activationNumber"`
-	MovementLimitMM  int      `json:"movementLimitMm"`
-	X                float64  `json:"x"`
-	Y                float64  `json:"y"`
-	FacingDeg        int      `json:"facingDeg"`
-	Placed           bool     `json:"placed"`
-	Minis            []Mini   `json:"minis"`
+	ID               string    `json:"id"`
+	PlayerID         int       `json:"playerId"`
+	Name             string    `json:"name"`
+	CatalogUnitID    string    `json:"catalogUnitId,omitempty"`
+	ArmyID           string    `json:"armyId,omitempty"`
+	ArmyUnitID       string    `json:"armyUnitId,omitempty"`
+	MaxHealth        int       `json:"maxHealth,omitempty"`
+	CurrentHealth    int       `json:"currentHealth,omitempty"`
+	Stats            UnitStats `json:"stats,omitempty"`
+	Base             BaseSize  `json:"base"`
+	ActivationNumber int       `json:"activationNumber"`
+	MovementLimitMM  int       `json:"movementLimitMm"`
+	X                float64   `json:"x"`
+	Y                float64   `json:"y"`
+	FacingDeg        int       `json:"facingDeg"`
+	Placed           bool      `json:"placed"`
+	Minis            []Mini    `json:"minis"`
 }
 
 type Mini struct {

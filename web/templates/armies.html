@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Armies - Miniswar</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script defer src="/static/app.js"></script>
+  <script defer src="/static/alpine.min.js"></script>
+</head>
+<body x-data="armiesManager" x-init="initArmies()">
+  <header class="topbar">
+    <div>
+      <h1>Armies</h1>
+      <p x-text="statusLine()"></p>
+    </div>
+    <div class="topbar-actions">
+      <a class="button-link" href="/">Game</a>
+      <button type="button" @click="createTemplate()">New Template</button>
+      <button type="button" @click="createArmy()">New Roster</button>
+    </div>
+  </header>
+
+  <main class="armies-shell">
+    <section class="army-sidebar">
+      <h2>Templates</h2>
+      <ol class="army-list">
+        <template x-for="template in templates" :key="template.id">
+          <li>
+            <button type="button" @click="selectTemplate(template.id)" :class="{ selected: mode === 'template' && selectedId === template.id }">
+              <span x-text="template.name"></span>
+              <small x-text="`${template.totalPoints}/${template.targetPoints || 0} pts`"></small>
+            </button>
+          </li>
+        </template>
+      </ol>
+
+      <h2>Rosters</h2>
+      <ol class="army-list">
+        <template x-for="army in armies" :key="army.id">
+          <li>
+            <button type="button" @click="selectArmy(army.id)" :class="{ selected: mode === 'army' && selectedId === army.id }">
+              <span x-text="army.name"></span>
+              <small x-text="`${army.totalPoints}/${army.targetPoints || 0} pts`"></small>
+            </button>
+          </li>
+        </template>
+      </ol>
+    </section>
+
+    <section class="catalog-panel">
+      <div class="catalog-toolbar">
+        <label>Nation
+          <select x-model="filters.nation" @change="loadCatalog()">
+            <option value="">All</option>
+            <template x-for="nation in filterOptions.nations" :key="nation">
+              <option :value="nation" x-text="nation"></option>
+            </template>
+          </select>
+        </label>
+        <label>Terrain
+          <select x-model="filters.terrain" @change="loadCatalog()">
+            <option value="">All</option>
+            <template x-for="terrain in filterOptions.terrains" :key="terrain">
+              <option :value="terrain" x-text="terrain"></option>
+            </template>
+          </select>
+        </label>
+      </div>
+
+      <div class="statblock-grid">
+        <template x-for="unit in catalogUnits" :key="unit.id">
+          <article class="statblock">
+            <div class="statblock-head">
+              <div>
+                <h2 x-text="unit.unitName"></h2>
+                <p x-text="`${unit.nation} - ${unit.base} - ${unit.pts} pts`"></p>
+              </div>
+              <button type="button" @click="addUnit(unit)">Add</button>
+            </div>
+            <dl class="stats-row">
+              <template x-for="key in ['a','m','f','s','d','cd','h']" :key="key">
+                <div>
+                  <dt x-text="key.toUpperCase()"></dt>
+                  <dd x-text="unit[key]"></dd>
+                </div>
+              </template>
+            </dl>
+            <p class="tag-line" x-text="unit.terrain.join(', ')"></p>
+            <p class="tag-line" x-text="unit.special.length ? unit.special.join(', ') : 'No special rules'"></p>
+            <p class="tag-line" x-text="unit.equipment.length ? unit.equipment.join(', ') : 'No equipment'"></p>
+          </article>
+        </template>
+      </div>
+    </section>
+
+    <section class="roster-panel" x-show="selected">
+      <div class="roster-header">
+        <label>Name
+          <input x-model="selected.name" @change="saveSelectedMeta()">
+        </label>
+        <label>Target Points
+          <input type="number" min="0" x-model.number="selected.targetPoints" @change="saveSelectedMeta()">
+        </label>
+      </div>
+      <p class="points-warning" :class="{ off: selected.totalPoints === selected.targetPoints }" x-text="pointsLine()"></p>
+      <button type="button" x-show="mode === 'template'" @click="createArmyFromSelected()">Create Roster From Template</button>
+
+      <ol class="roster-units">
+        <template x-for="line in selected.units || []" :key="line.id">
+          <li>
+            <div>
+              <strong x-text="line.catalogUnit.unitName"></strong>
+              <small x-text="`${line.catalogUnit.pts} pts - ${line.catalogUnit.base}`"></small>
+            </div>
+            <label x-show="mode === 'template'">Default Moniker
+              <input x-model="line.defaultMoniker" @change="saveLine(line)">
+            </label>
+            <label x-show="mode === 'army'">Moniker
+              <input x-model="line.moniker" @change="saveLine(line)">
+            </label>
+            <label>Minis
+              <input type="number" min="1" x-model.number="line.miniCount" @change="saveLine(line)">
+            </label>
+            <label x-show="mode === 'army'">HP
+              <input type="number" min="0" :max="line.maxHealth" x-model.number="line.currentHealth" @change="saveLine(line)">
+            </label>
+            <button type="button" @click="removeLine(line)">Remove</button>
+          </li>
+        </template>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>

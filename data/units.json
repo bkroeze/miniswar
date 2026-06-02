@@ -14,11 +14,16 @@
     "H": 3,
     "Pts": 322,
     "Special": [
-      "Command (2)"
+      "Command (2)",
+      "Champion",
+      "Shielding (1)",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -36,11 +41,16 @@
     "H": 2,
     "Pts": 165,
     "Special": [
-      "Command (1)"
+      "Command (1)",
+      "Champion",
+      "Shielding (1)",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -58,11 +68,15 @@
     "H": 2,
     "Pts": 293,
     "Special": [
-      "Command (2)"
+      "Command (2)",
+      "Shielding (1)",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -95,7 +109,8 @@
     "Unit Name": "Dwarf Champion",
     "Nation": "Dwarf",
     "Terrain": [
-      "Dwarf City"
+      "Dwarf City",
+      "Forges"
     ],
     "A": 4,
     "M": 5,
@@ -121,7 +136,8 @@
     "Unit Name": "Dwarf Spellcaster 1",
     "Nation": "Dwarf",
     "Terrain": [
-      "Dwarf City"
+      "Dwarf City",
+      "Hermitage"
     ],
     "A": 4,
     "M": 5,
@@ -132,7 +148,10 @@
     "H": 2,
     "Pts": 30,
     "Special": [
-      "Spellcaster (1)"
+      "Spellcaster (1)",
+      "Shielding (1)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -143,7 +162,8 @@
     "Unit Name": "Dwarf Spellcaster 2",
     "Nation": "Dwarf",
     "Terrain": [
-      "Dwarf City"
+      "Dwarf City",
+      "Hermitage"
     ],
     "A": 4,
     "M": 5,
@@ -154,7 +174,10 @@
     "H": 2,
     "Pts": 60,
     "Special": [
-      "Spellcaster (2)"
+      "Spellcaster (2)",
+      "Shielding (1)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -176,7 +199,10 @@
     "H": 2,
     "Pts": 110,
     "Special": [
-      "Spellcaster (3)"
+      "Spellcaster (3)",
+      "Shielding (2)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -198,7 +224,10 @@
     "H": 3,
     "Pts": 200,
     "Special": [
-      "Spellcaster (4)"
+      "Spellcaster (4)",
+      "Shielding (2)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -220,7 +249,11 @@
     "H": 3,
     "Pts": 270,
     "Special": [
-      "Spellcaster (5)"
+      "Spellcaster (5)",
+      "Champion",
+      "Shielding (2)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -246,7 +279,9 @@
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Light Armour"
     ]
   },
   {
@@ -264,11 +299,14 @@
     "H": 1,
     "Pts": 16,
     "Special": [
-      "Shielding (1)"
+      "Shielding (1)",
+      "Brace"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Equipment: Spear"
+      "Spear",
+      "Shield",
+      "Light Armour"
     ]
   },
   {
@@ -290,7 +328,9 @@
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Equipment: Hand Weapon"
+      "Hand Weapon",
+      "Bow",
+      "Light Armour"
     ]
   },
   {
@@ -312,7 +352,9 @@
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Equipment: Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -337,6 +379,50 @@
     ]
   },
   {
+    "Unit Name": "Dwarf Border Guard",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Mountain Passes"
+    ],
+    "A": 4,
+    "M": 5,
+    "F": 0,
+    "S": 2,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 17,
+    "Special": [
+      "Nimble",
+      "Aimed Fire"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon",
+      "Bow"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Militia",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Dwarf City"
+    ],
+    "A": 5,
+    "M": 5,
+    "F": 3,
+    "S": 0,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 14,
+    "Special": [],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Two-Handed Weapon"
+    ]
+  },
+  {
     "Unit Name": "Dwarf Light Catapult",
     "Nation": "Dwarf",
     "Terrain": [
@@ -351,7 +437,10 @@
     "H": 1,
     "Pts": 120,
     "Special": [
-      "Artillery"
+      "Artillery",
+      "Crew (3)",
+      "Indirect Fire",
+      "Shielding (1)"
     ],
     "Base": "100 x 50",
     "Equipment": [
@@ -373,7 +462,10 @@
     "H": 1,
     "Pts": 140,
     "Special": [
-      "Artillery"
+      "Artillery",
+      "Crew (4)",
+      "Indirect Fire",
+      "Shielding (1)"
     ],
     "Base": "100 x 50",
     "Equipment": [
@@ -395,12 +487,15 @@
     "H": 5,
     "Pts": 160,
     "Special": [
-      "Monster"
+      "Monster",
+      "Shielding (1)",
+      "Charge (3)",
+      "Brace",
+      "Large",
+      "Courage (1)"
     ],
     "Base": "50 x 50",
-    "Equipment": [
-      ""
-    ]
+    "Equipment": []
   },
   {
     "Unit Name": "Eachy",
@@ -417,12 +512,15 @@
     "H": 5,
     "Pts": 120,
     "Special": [
-      "Monster"
+      "Monster",
+      "Regenerate (1)",
+      "Horrific",
+      "Waterwalk",
+      "Large",
+      "Courage (2)"
     ],
     "Base": "50 x 50",
-    "Equipment": [
-      ""
-    ]
+    "Equipment": []
   },
   {
     "Unit Name": "Barghest",
@@ -439,7 +537,12 @@
     "H": 4,
     "Pts": 200,
     "Special": [
-      "Monster"
+      "Monster",
+      "Shielding (1)",
+      "Wild Charge (1)",
+      "Discorporate",
+      "Horrific",
+      "Large"
     ],
     "Base": "50 x 50",
     "Equipment": []
@@ -459,11 +562,16 @@
     "H": 3,
     "Pts": 279,
     "Special": [
-      "Command (2)"
+      "Command (2)",
+      "Champion",
+      "Shielding (1)",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -481,11 +589,16 @@
     "H": 2,
     "Pts": 145,
     "Special": [
-      "Command (1)"
+      "Command (1)",
+      "Champion",
+      "Shielding (1)",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -503,11 +616,15 @@
     "H": 2,
     "Pts": 260,
     "Special": [
-      "Command (2)"
+      "Command (2)",
+      "Shielding (1)",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -525,18 +642,23 @@
     "H": 1,
     "Pts": 133,
     "Special": [
-      "Command (1)"
+      "Command (1)",
+      "Shielding (1)",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
     "Unit Name": "Human Champion",
     "Nation": "Human",
     "Terrain": [
-      "Human City"
+      "Human City",
+      "Iron Mine"
     ],
     "A": 5,
     "M": 6,
@@ -547,18 +669,23 @@
     "H": 1,
     "Pts": 51,
     "Special": [
-      "Champion"
+      "Champion",
+      "Shielding (1)",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
     "Unit Name": "Human Spellcaster 1",
     "Nation": "Human",
     "Terrain": [
-      "Human City"
+      "Human City",
+      "Monastery"
     ],
     "A": 5,
     "M": 6,
@@ -569,7 +696,10 @@
     "H": 2,
     "Pts": 50,
     "Special": [
-      "Spellcaster (1)"
+      "Spellcaster (1)",
+      "Shielding (1)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -580,7 +710,8 @@
     "Unit Name": "Human Spellcaster 2",
     "Nation": "Human",
     "Terrain": [
-      "Human City"
+      "Human City",
+      "Monastery"
     ],
     "A": 5,
     "M": 6,
@@ -591,7 +722,10 @@
     "H": 2,
     "Pts": 100,
     "Special": [
-      "Spellcaster (2)"
+      "Spellcaster (2)",
+      "Shielding (1)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -613,7 +747,10 @@
     "H": 2,
     "Pts": 200,
     "Special": [
-      "Spellcaster (3)"
+      "Spellcaster (3)",
+      "Shielding (2)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -635,7 +772,10 @@
     "H": 3,
     "Pts": 300,
     "Special": [
-      "Spellcaster (4)"
+      "Spellcaster (4)",
+      "Shielding (2)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -657,7 +797,11 @@
     "H": 3,
     "Pts": 400,
     "Special": [
-      "Spellcaster (5)"
+      "Spellcaster (5)",
+      "Champion",
+      "Shielding (2)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -683,9 +827,9 @@
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "    Hand Weapon",
+      "Hand Weapon",
       "Shield",
-      "Light Armour  "
+      "Light Armour"
     ]
   },
   {
@@ -708,9 +852,9 @@
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "    Spear",
+      "Spear",
       "Shield",
-      "Light Armour  "
+      "Light Armour"
     ]
   },
   {
@@ -732,7 +876,9 @@
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Bow",
+      "Light Armour"
     ]
   },
   {
@@ -754,7 +900,9 @@
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -774,7 +922,8 @@
     "Special": [],
     "Base": "25 x 25",
     "Equipment": [
-      "Two-Handed Weapon"
+      "Two-Handed Weapon",
+      "Heavy Armour"
     ]
   },
   {
@@ -796,7 +945,8 @@
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield"
     ]
   },
   {
@@ -814,11 +964,13 @@
     "H": 1,
     "Pts": 14,
     "Special": [
-      "Nimble"
+      "Nimble",
+      "Aimed Fire"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Bow"
     ]
   },
   {
@@ -840,7 +992,8 @@
     ],
     "Base": "25 x 50",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Bow"
     ]
   },
   {
@@ -858,11 +1011,14 @@
     "H": 1,
     "Pts": 45,
     "Special": [
-      "Charge (3)"
+      "Charge (3)",
+      "Shielding (1)"
     ],
     "Base": "25 x 50",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Light Armour"
     ]
   },
   {
@@ -880,11 +1036,14 @@
     "H": 1,
     "Pts": 50,
     "Special": [
-      "Charge (3)"
+      "Charge (3)",
+      "Shielding (1)"
     ],
     "Base": "25 x 50",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -902,7 +1061,10 @@
     "H": 1,
     "Pts": 120,
     "Special": [
-      "Artillery"
+      "Artillery",
+      "Crew (4)",
+      "Indirect Fire",
+      "Shielding (1)"
     ],
     "Base": "100 x 50",
     "Equipment": [
@@ -924,11 +1086,17 @@
     "H": 3,
     "Pts": 40,
     "Special": [
-      "Champion"
+      "Champion",
+      "Charge (1)",
+      "Shielding (1)",
+      "Courage (2)",
+      "Large"
     ],
     "Base": "50 x 50",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Light Armour"
     ]
   },
   {
@@ -946,11 +1114,15 @@
     "H": 3,
     "Pts": 45,
     "Special": [
-      "Champion"
+      "Champion",
+      "Charge (1)",
+      "Courage (2)",
+      "Large"
     ],
     "Base": "50 x 50",
     "Equipment": [
-      "Two-Handed Weapon"
+      "Two-Handed Weapon",
+      "Light Armour"
     ]
   },
   {
@@ -968,7 +1140,11 @@
     "H": 5,
     "Pts": 450,
     "Special": [
-      "Monster"
+      "Monster",
+      "Shielding (2)",
+      "Charge (1)",
+      "Spellcaster (3)",
+      "Large"
     ],
     "Base": "50 x 50",
     "Equipment": [
@@ -990,7 +1166,10 @@
     "H": 12,
     "Pts": 350,
     "Special": [
-      "Monster"
+      "Monster",
+      "Charge (1) Wild Charge",
+      "Horrific",
+      "Courage (1)"
     ],
     "Base": "100 x 50",
     "Equipment": [
@@ -1012,11 +1191,16 @@
     "H": 2,
     "Pts": 189,
     "Special": [
-      "Command (1)"
+      "Command (1)",
+      "Champion",
+      "Shielding (1)",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -1034,11 +1218,15 @@
     "H": 2,
     "Pts": 329,
     "Special": [
-      "Command (2)"
+      "Command (2)",
+      "Shielding (1)",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -1056,18 +1244,23 @@
     "H": 1,
     "Pts": 174,
     "Special": [
-      "Command (1)"
+      "Command (1)",
+      "Shielding (1)",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
     "Unit Name": "Elf Champion",
     "Nation": "Elf",
     "Terrain": [
-      "Elf City"
+      "Elf City",
+      "Slave Mines"
     ],
     "A": 3,
     "M": 6,
@@ -1078,18 +1271,22 @@
     "H": 1,
     "Pts": 74,
     "Special": [
-      "Champion"
+      "Champion",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
     "Unit Name": "Elf Spellcaster 1",
     "Nation": "Elf",
     "Terrain": [
-      "Elf City"
+      "Elf City",
+      "Towers"
     ],
     "A": 3,
     "M": 6,
@@ -1100,7 +1297,10 @@
     "H": 2,
     "Pts": 60,
     "Special": [
-      "Spellcaster (1)"
+      "Spellcaster (1)",
+      "Shielding (1)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -1111,7 +1311,8 @@
     "Unit Name": "Elf Spellcaster 2",
     "Nation": "Elf",
     "Terrain": [
-      "Elf City"
+      "Elf City",
+      "Towers"
     ],
     "A": 3,
     "M": 6,
@@ -1122,7 +1323,10 @@
     "H": 2,
     "Pts": 130,
     "Special": [
-      "Spellcaster (2)"
+      "Spellcaster (2)",
+      "Shielding (1)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -1144,7 +1348,10 @@
     "H": 2,
     "Pts": 240,
     "Special": [
-      "Spellcaster (3)"
+      "Spellcaster (3)",
+      "Shielding (2)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -1166,7 +1373,10 @@
     "H": 3,
     "Pts": 350,
     "Special": [
-      "Spellcaster (4)"
+      "Spellcaster (4)",
+      "Shielding (2)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -1188,7 +1398,11 @@
     "H": 3,
     "Pts": 490,
     "Special": [
-      "Spellcaster (5)"
+      "Spellcaster (5)",
+      "Champion",
+      "Shielding (2)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -1214,7 +1428,9 @@
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Light Armour"
     ]
   },
   {
@@ -1232,11 +1448,14 @@
     "H": 1,
     "Pts": 22,
     "Special": [
-      "Shielding (1)"
+      "Shielding (1)",
+      "Brace"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Spear"
+      "Spear",
+      "Shield",
+      "Light Armour"
     ]
   },
   {
@@ -1254,11 +1473,14 @@
     "H": 1,
     "Pts": 24,
     "Special": [
-      "Fire Over"
+      "Fire Over",
+      "Aimed Fire"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Elf Bow",
+      "Light Armour"
     ]
   },
   {
@@ -1276,11 +1498,13 @@
     "H": 1,
     "Pts": 22,
     "Special": [
-      "Shielding (1)"
+      "Shielding (1)",
+      "Nimble"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield"
     ]
   },
   {
@@ -1298,11 +1522,14 @@
     "H": 1,
     "Pts": 70,
     "Special": [
-      "Charge (3)"
+      "Charge (3)",
+      "Shielding (1)"
     ],
     "Base": "25 x 50",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Light Armour"
     ]
   },
   {
@@ -1324,7 +1551,8 @@
     ],
     "Base": "25 x 50",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Elf Bow"
     ]
   },
   {
@@ -1364,7 +1592,10 @@
     "H": 1,
     "Pts": 120,
     "Special": [
-      "Artillery"
+      "Artillery",
+      "Aimed Fire",
+      "Crew (2)",
+      "Shielding (1)"
     ],
     "Base": "50 x 50",
     "Equipment": [
@@ -1386,12 +1617,14 @@
     "H": 8,
     "Pts": 500,
     "Special": [
-      "Monster"
+      "Monster",
+      "Horrific",
+      "Shielding (2)",
+      "Flying",
+      "Enormous"
     ],
     "Base": "100 x 50",
-    "Equipment": [
-      "None"
-    ]
+    "Equipment": []
   },
   {
     "Unit Name": "Giant Spider",
@@ -1408,7 +1641,9 @@
     "H": 3,
     "Pts": 48,
     "Special": [
-      "Horrific"
+      "Horrific",
+      "Shielding (1)",
+      "Nimble"
     ],
     "Base": "50 x 50",
     "Equipment": []
@@ -1428,7 +1663,11 @@
     "H": 3,
     "Pts": 80,
     "Special": [
-      "Horrific"
+      "Horrific",
+      "Charge (2)",
+      "Wild Charge",
+      "Nimble",
+      "Regenerate"
     ],
     "Base": "50 x 50",
     "Equipment": []
@@ -1448,11 +1687,17 @@
     "H": 3,
     "Pts": 245,
     "Special": [
-      "Command (2)"
+      "Command (2)",
+      "Champion",
+      "Shielding (1)",
+      "Charge (1)",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -1470,11 +1715,17 @@
     "H": 2,
     "Pts": 124,
     "Special": [
-      "Command (1)"
+      "Command (1)",
+      "Champion",
+      "Shielding (1)",
+      "Charge (1)",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -1492,11 +1743,15 @@
     "H": 2,
     "Pts": 227,
     "Special": [
-      "Command (2)"
+      "Command (2)",
+      "Shielding (1)",
+      "Charge (1)"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -1514,20 +1769,23 @@
     "H": 1,
     "Pts": 114,
     "Special": [
-      "Command (1)"
+      "Command (1)",
+      "Shielding (1)",
+      "Charge (1)"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "    Hand Weapon",
+      "Hand Weapon",
       "Shield",
-      "Heavy Armour  "
+      "Heavy Armour"
     ]
   },
   {
     "Unit Name": "Goblin Champion",
     "Nation": "Goblin",
     "Terrain": [
-      "Goblin City"
+      "Goblin City",
+      "Smithies"
     ],
     "A": 6,
     "M": 6,
@@ -1538,20 +1796,23 @@
     "H": 1,
     "Pts": 37,
     "Special": [
-      "Champion"
+      "Champion",
+      "Shielding (1)",
+      "Charge (1)"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "    Hand Weapon",
+      "Hand Weapon",
       "Shield",
-      "Heavy Armour  "
+      "Heavy Armour"
     ]
   },
   {
     "Unit Name": "Goblin Spellcaster 1",
     "Nation": "Goblin",
     "Terrain": [
-      "Goblin City"
+      "Goblin City",
+      "Dungeon"
     ],
     "A": 6,
     "M": 6,
@@ -1562,7 +1823,11 @@
     "H": 2,
     "Pts": 40,
     "Special": [
-      "Spellcaster (1)"
+      "Spellcaster (1)",
+      "Shielding (1)",
+      "Charge (1)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -1573,7 +1838,8 @@
     "Unit Name": "Goblin Spellcaster 2",
     "Nation": "Goblin",
     "Terrain": [
-      "Goblin City"
+      "Goblin City",
+      "Dungeon"
     ],
     "A": 6,
     "M": 6,
@@ -1584,7 +1850,11 @@
     "H": 2,
     "Pts": 80,
     "Special": [
-      "Spellcaster (2)"
+      "Spellcaster (2)",
+      "Shielding (1)",
+      "Charge (1)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -1606,7 +1876,11 @@
     "H": 2,
     "Pts": 180,
     "Special": [
-      "Spellcaster (3)"
+      "Spellcaster (3)",
+      "Shielding (2)",
+      "Charge (1)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -1628,7 +1902,11 @@
     "H": 3,
     "Pts": 260,
     "Special": [
-      "Spellcaster (4)"
+      "Spellcaster (4)",
+      "Shielding (2)",
+      "Charge (1)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -1650,7 +1928,12 @@
     "H": 3,
     "Pts": 340,
     "Special": [
-      "Spellcaster (5)"
+      "Spellcaster (5)",
+      "Champion",
+      "Shielding (2)",
+      "Charge (1)",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
@@ -1672,11 +1955,14 @@
     "H": 1,
     "Pts": 10,
     "Special": [
-      "Charge (1)"
+      "Charge (1)",
+      "Shielding (1)"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Light Armour"
     ]
   },
   {
@@ -1768,7 +2054,8 @@
     "Special": [],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Sling"
     ]
   },
   {
@@ -1786,11 +2073,18 @@
     "H": 3,
     "Pts": 279,
     "Special": [
-      "Command (2)"
+      "Command (2)",
+      "Champion",
+      "Shielding (1)",
+      "Charge (1)",
+      "Wild Charge",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -1808,11 +2102,18 @@
     "H": 2,
     "Pts": 145,
     "Special": [
-      "Command (1)"
+      "Command (1)",
+      "Champion",
+      "Shielding (1)",
+      "Charge (1)",
+      "Wild Charge",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -1830,11 +2131,17 @@
     "H": 2,
     "Pts": 260,
     "Special": [
-      "Command (2)"
+      "Command (2)",
+      "Shielding (1)",
+      "Charge (1)",
+      "Wild Charge",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -1852,18 +2159,25 @@
     "H": 1,
     "Pts": 133,
     "Special": [
-      "Command (1)"
+      "Command (1)",
+      "Shielding (1)",
+      "Charge (1)",
+      "Wild Charge",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
     "Unit Name": "Orc Champion",
     "Nation": "Orc",
     "Terrain": [
-      "Orc City"
+      "Orc City",
+      "Smithies"
     ],
     "A": 6,
     "M": 6,
@@ -1874,20 +2188,25 @@
     "H": 1,
     "Pts": 49,
     "Special": [
-      "Champion"
+      "Champion",
+      "Shielding (1)",
+      "Charge (1)",
+      "Wild Charge",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "    Hand Weapon",
+      "Hand Weapon",
       "Shield",
-      "Heavy Armour  "
+      "Heavy Armour"
     ]
   },
   {
     "Unit Name": "Orc Spellcaster 1",
     "Nation": "Orc",
     "Terrain": [
-      "Orc City"
+      "Orc City",
+      "Dungeons"
     ],
     "A": 6,
     "M": 6,
@@ -1898,18 +2217,24 @@
     "H": 2,
     "Pts": 50,
     "Special": [
-      "Spellcaster (1)"
+      "Spellcaster (1)",
+      "Shielding (1)",
+      "Charge (1)",
+      "Wild Charge",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "    Hand Weapon  "
+      "Hand Weapon"
     ]
   },
   {
     "Unit Name": "Orc Spellcaster 2",
     "Nation": "Orc",
     "Terrain": [
-      "Orc City"
+      "Orc City",
+      "Dungeons"
     ],
     "A": 6,
     "M": 6,
@@ -1920,11 +2245,16 @@
     "H": 2,
     "Pts": 100,
     "Special": [
-      "Spellcaster (2)"
+      "Spellcaster (2)",
+      "Shielding (1)",
+      "Charge (1)",
+      "Wild Charge",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "    Hand Weapon  "
+      "Hand Weapon"
     ]
   },
   {
@@ -1942,11 +2272,16 @@
     "H": 2,
     "Pts": 200,
     "Special": [
-      "Spellcaster (3)"
+      "Spellcaster (3)",
+      "Shielding (2)",
+      "Charge (1)",
+      "Wild Charge",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "    Hand Weapon  "
+      "Hand Weapon"
     ]
   },
   {
@@ -1964,11 +2299,16 @@
     "H": 3,
     "Pts": 300,
     "Special": [
-      "Spellcaster (4)"
+      "Spellcaster (4)",
+      "Shielding (2)",
+      "Charge (1)",
+      "Wild Charge",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "    Hand Weapon  "
+      "Hand Weapon"
     ]
   },
   {
@@ -1986,11 +2326,17 @@
     "H": 3,
     "Pts": 400,
     "Special": [
-      "Spellcaster (5)"
+      "Spellcaster (5)",
+      "Champion",
+      "Shielding (2)",
+      "Charge (1)",
+      "Wild Charge",
+      "Fire Over",
+      "Magic Items"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "    Hand Weapon  "
+      "Hand Weapon"
     ]
   },
   {
@@ -2008,11 +2354,15 @@
     "H": 1,
     "Pts": 13,
     "Special": [
-      "Charge (1)"
+      "Charge (1)",
+      "Wild Charge (1)",
+      "Shielding (1)"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Light Armour"
     ]
   },
   {
@@ -2030,11 +2380,16 @@
     "H": 1,
     "Pts": 14,
     "Special": [
-      "Charge (1)"
+      "Charge (1)",
+      "Wild Charge",
+      "Shielding (1)",
+      "Brace"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Spear"
+      "Spear",
+      "Shield",
+      "Light Armour"
     ]
   },
   {
@@ -2052,11 +2407,15 @@
     "H": 1,
     "Pts": 14,
     "Special": [
-      "Charge (1)"
+      "Charge (1)",
+      "Wild Charge",
+      "Fire Over"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Bow",
+      "Light Armour"
     ]
   },
   {
@@ -2074,11 +2433,15 @@
     "H": 1,
     "Pts": 15,
     "Special": [
-      "Charge (1)"
+      "Charge (1)",
+      "Wild Charge",
+      "Shielding (1)"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
     ]
   },
   {
@@ -2096,11 +2459,13 @@
     "H": 1,
     "Pts": 18,
     "Special": [
-      "Charge (1)"
+      "Charge (1)",
+      "Wild Charge"
     ],
     "Base": "25 x 25",
     "Equipment": [
-      "Two-Handed Weapon"
+      "Two-Handed Weapon",
+      "Heavy Armour"
     ]
   },
   {
@@ -2138,11 +2503,14 @@
     "H": 1,
     "Pts": 20,
     "Special": [
-      "Charge (2)"
+      "Charge (2)",
+      "Shielding (1)"
     ],
     "Base": "25 x 50",
     "Equipment": [
-      "hand weapon"
+      "hand weapon",
+      "shield",
+      "light armour"
     ]
   },
   {
@@ -2160,11 +2528,14 @@
     "H": 1,
     "Pts": 24,
     "Special": [
-      "Charge (1)"
+      "Charge (1)",
+      "Aimed Fire"
     ],
     "Base": "25 x 50",
     "Equipment": [
-      "hand weapon"
+      "hand weapon",
+      "bow",
+      "light armour"
     ]
   },
   {
@@ -2182,7 +2553,11 @@
     "H": 1,
     "Pts": 80,
     "Special": [
-      "Artillery"
+      "Artillery",
+      "Crew (3)",
+      "Indirect Fire",
+      "Shielding (1)",
+      "Charge (1)"
     ],
     "Base": "100 x 50",
     "Equipment": [
@@ -2204,11 +2579,17 @@
     "H": 1,
     "Pts": 120,
     "Special": [
-      "Artillery"
+      "Artillery",
+      "Crew (4)",
+      "Indirect Fire",
+      "Shielding (1)",
+      "Charge (1)",
+      "Wild Charge"
     ],
     "Base": "100 x 50",
     "Equipment": [
-      "Hand Weapon"
+      "Hand Weapon",
+      "Light Armour"
     ]
   },
   {
@@ -2226,7 +2607,13 @@
     "H": 3,
     "Pts": 65,
     "Special": [
-      "Champion"
+      "Champion",
+      "Shielding (1)",
+      "Charge (2)",
+      "Wild Charge",
+      "Horrific",
+      "Water Walk",
+      "Large"
     ],
     "Base": "50 x 50",
     "Equipment": []
@@ -2246,7 +2633,12 @@
     "H": 8,
     "Pts": 500,
     "Special": [
-      "Monster"
+      "Monster",
+      "Horrific",
+      "Poisonous Breath",
+      "Water Walk",
+      "Courage (3)",
+      "Enormous"
     ],
     "Base": "100 x 50",
     "Equipment": []
@@ -2288,11 +2680,12 @@
     "H": 3,
     "Pts": 400,
     "Special": [
-      "Monster"
+      "Monster",
+      "Shielding (2)",
+      "Spellcaster (4)",
+      "Discorporate"
     ],
     "Base": "25 x 25",
-    "Equipment": [
-      "None"
-    ]
+    "Equipment": []
   }
 ]

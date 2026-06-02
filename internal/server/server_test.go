@@ -150,6 +150,65 @@ func TestListGamesReturnsSummaries(t *testing.T) {
 	}
 }
 
+func TestCreateGameFromSavedArmies(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	units, err := st.CatalogUnits("Dwarf", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tpl1, err := st.CreateArmyTemplate("P1 Template", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tpl1, err = st.AddTemplateUnit(tpl1.ID, units[0].ID, "P1 Moniker", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p1, err := st.CreateArmyFromTemplate(tpl1.ID, "P1 Army")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tpl2, err := st.CreateArmyTemplate("P2 Template", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tpl2, err = st.AddTemplateUnit(tpl2.ID, units[1].ID, "P2 Moniker", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p2, err := st.CreateArmyFromTemplate(tpl2.ID, "P2 Army")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(st, game.NewEngine(1)).Routes()
+	body := `{"battlemapId":"old_road","player1ArmyId":"` + p1.ID + `","player2ArmyId":"` + p2.ID + `"}`
+	res := request(t, srv, http.MethodPost, "/api/games", body)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("create status %d: %s", res.Code, res.Body.String())
+	}
+	var created game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if len(created.Game.Units) != 2 {
+		t.Fatalf("game units = %d, want 2", len(created.Game.Units))
+	}
+	p1Unit := firstUnitForPlayer(created.Game, 1)
+	if p1Unit.Name != "P1 Moniker" || p1Unit.ArmyID != p1.ID || p1Unit.ArmyUnitID != p1.Units[0].ID || p1Unit.CatalogUnitID != units[0].ID {
+		t.Fatalf("player 1 unit missing roster identity: %#v", p1Unit)
+	}
+	if p1Unit.MaxHealth != units[0].H || p1Unit.CurrentHealth != units[0].H || p1Unit.Stats.Pts != units[0].Pts {
+		t.Fatalf("player 1 unit missing health/stats: %#v", p1Unit)
+	}
+}
+
 func request(t *testing.T, handler http.Handler, method, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(method, path, bytes.NewBufferString(body))

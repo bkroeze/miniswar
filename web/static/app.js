@@ -9,8 +9,11 @@ function createMiniswarApp() {
     loadGamesOpen: false,
     savedGames: [],
     savedGamesLoading: false,
+    armies: [],
     setup: {
       battlemapId: "old_road",
+      player1ArmyId: "",
+      player2ArmyId: "",
       player1: { base: "25x25", count: 12, units: [{ base: "25x25", count: 12 }] },
       player2: { base: "25x25", count: 10, units: [{ base: "25x25", count: 10 }] },
     },
@@ -32,8 +35,10 @@ function createMiniswarApp() {
       };
       return {
         battlemapId: this.setup.battlemapId,
-        player1Units: this.setup.player1.units.map((unit) => ({ ...parseBase(unit.base), count: unit.count })),
-        player2Units: this.setup.player2.units.map((unit) => ({ ...parseBase(unit.base), count: unit.count })),
+        player1ArmyId: this.setup.player1ArmyId,
+        player2ArmyId: this.setup.player2ArmyId,
+        player1Units: this.setup.player1ArmyId ? [] : this.setup.player1.units.map((unit) => ({ ...parseBase(unit.base), count: unit.count })),
+        player2Units: this.setup.player2ArmyId ? [] : this.setup.player2.units.map((unit) => ({ ...parseBase(unit.base), count: unit.count })),
       };
     },
 
@@ -48,6 +53,7 @@ function createMiniswarApp() {
     },
 
     async createGame() {
+      await this.loadArmies();
       const response = await this.api("/api/games", {
         method: "POST",
         body: JSON.stringify(this.setupPayload()),
@@ -56,6 +62,15 @@ function createMiniswarApp() {
         await this.setGame(response.game, { resetSelection: true });
       }
       this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    async loadArmies() {
+      const response = await this.api("/api/armies");
+      if (response.ok) {
+        this.armies = response.armies || [];
+        if (!this.setup.player1ArmyId && this.armies[0]) this.setup.player1ArmyId = this.armies[0].id;
+        if (!this.setup.player2ArmyId && this.armies[1]) this.setup.player2ArmyId = this.armies[1].id;
+      }
     },
 
     async openLoadGames() {
@@ -438,7 +453,164 @@ function createMiniswarApp() {
   };
 }
 
+function createArmiesManager() {
+  return {
+    mode: "template",
+    selectedId: "",
+    selected: null,
+    templates: [],
+    armies: [],
+    catalogUnits: [],
+    filterOptions: { nations: [], terrains: [] },
+    filters: { nation: "", terrain: "" },
+    messages: [],
+
+    async initArmies() {
+      await Promise.all([this.loadFilters(), this.loadCatalog(), this.loadTemplates(), this.loadArmies()]);
+      if (this.templates[0]) await this.selectTemplate(this.templates[0].id);
+      else if (this.armies[0]) await this.selectArmy(this.armies[0].id);
+    },
+
+    async api(path, options = {}) {
+      const response = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+      return await response.json();
+    },
+
+    async loadFilters() {
+      const response = await this.api("/api/catalog/filters");
+      if (response.ok) this.filterOptions = response.filters;
+    },
+
+    async loadCatalog() {
+      const params = new URLSearchParams();
+      if (this.filters.nation) params.set("nation", this.filters.nation);
+      if (this.filters.terrain) params.set("terrain", this.filters.terrain);
+      const response = await this.api(`/api/catalog/units?${params.toString()}`);
+      if (response.ok) this.catalogUnits = response.units || [];
+    },
+
+    async loadTemplates() {
+      const response = await this.api("/api/army-templates");
+      if (response.ok) this.templates = response.templates || [];
+    },
+
+    async loadArmies() {
+      const response = await this.api("/api/armies");
+      if (response.ok) this.armies = response.armies || [];
+    },
+
+    async createTemplate() {
+      const response = await this.api("/api/army-templates", { method: "POST", body: JSON.stringify({ name: "New Template", targetPoints: 1000 }) });
+      await this.loadTemplates();
+      if (response.ok) await this.selectTemplate(response.template.id);
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    async createArmy() {
+      const response = await this.api("/api/armies", { method: "POST", body: JSON.stringify({ name: "New Army", targetPoints: 1000 }) });
+      await this.loadArmies();
+      if (response.ok) await this.selectArmy(response.army.id);
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    async createArmyFromSelected() {
+      if (!this.selected || this.mode !== "template") return;
+      const response = await this.api("/api/armies/from-template", {
+        method: "POST",
+        body: JSON.stringify({ templateId: this.selected.id, name: this.selected.name }),
+      });
+      await this.loadArmies();
+      if (response.ok) await this.selectArmy(response.army.id);
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    async selectTemplate(id) {
+      const response = await this.api(`/api/army-templates/${id}`);
+      if (response.ok) {
+        this.mode = "template";
+        this.selectedId = id;
+        this.selected = response.template;
+      }
+    },
+
+    async selectArmy(id) {
+      const response = await this.api(`/api/armies/${id}`);
+      if (response.ok) {
+        this.mode = "army";
+        this.selectedId = id;
+        this.selected = response.army;
+      }
+    },
+
+    async saveSelectedMeta() {
+      if (!this.selected) return;
+      const path = this.mode === "template" ? `/api/army-templates/${this.selected.id}` : `/api/armies/${this.selected.id}`;
+      const response = await this.api(path, {
+        method: "PATCH",
+        body: JSON.stringify({ name: this.selected.name, targetPoints: this.selected.targetPoints }),
+      });
+      if (response.ok) this.selected = this.mode === "template" ? response.template : response.army;
+      await Promise.all([this.loadTemplates(), this.loadArmies()]);
+    },
+
+    async addUnit(unit) {
+      if (!this.selected) {
+        await this.createTemplate();
+      }
+      const path = this.mode === "template" ? `/api/army-templates/${this.selected.id}/units` : `/api/armies/${this.selected.id}/units`;
+      const response = await this.api(path, {
+        method: "POST",
+        body: JSON.stringify({ catalogUnitId: unit.id, moniker: unit.unitName, miniCount: 1 }),
+      });
+      if (response.ok) this.selected = this.mode === "template" ? response.template : response.army;
+      await Promise.all([this.loadTemplates(), this.loadArmies()]);
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    async saveLine(line) {
+      const path =
+        this.mode === "template"
+          ? `/api/army-templates/${this.selected.id}/units/${line.id}`
+          : `/api/armies/${this.selected.id}/units/${line.id}`;
+      const response = await this.api(path, {
+        method: "PATCH",
+        body: JSON.stringify({
+          moniker: this.mode === "template" ? line.defaultMoniker : line.moniker,
+          miniCount: line.miniCount,
+          currentHealth: line.currentHealth,
+        }),
+      });
+      if (response.ok) this.selected = this.mode === "template" ? response.template : response.army;
+      await Promise.all([this.loadTemplates(), this.loadArmies()]);
+    },
+
+    async removeLine(line) {
+      const path =
+        this.mode === "template"
+          ? `/api/army-templates/${this.selected.id}/units/${line.id}`
+          : `/api/armies/${this.selected.id}/units/${line.id}`;
+      const response = await this.api(path, { method: "DELETE" });
+      if (response.ok) this.selected = this.mode === "template" ? response.template : response.army;
+      await Promise.all([this.loadTemplates(), this.loadArmies()]);
+    },
+
+    pointsLine() {
+      if (!this.selected) return "";
+      const target = this.selected.targetPoints || 0;
+      const total = this.selected.totalPoints || 0;
+      return total === target ? `${total}/${target} points` : `${total}/${target} points - total differs from target`;
+    },
+
+    statusLine() {
+      if (!this.selected) return "Create a template or roster to begin.";
+      return `${this.selected.name}: ${this.pointsLine()}`;
+    },
+  };
+}
+
 window.miniswar = createMiniswarApp;
+window.armiesManager = createArmiesManager;
 document.addEventListener("alpine:init", () => {
   window.Alpine.data("miniswar", createMiniswarApp);
+  window.Alpine.data("armiesManager", createArmiesManager);
 });

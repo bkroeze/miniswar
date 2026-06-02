@@ -34,6 +34,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /", s.index)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 	mux.HandleFunc("POST /api/games", s.createGame)
+	mux.HandleFunc("GET /api/games", s.listGames)
 	mux.HandleFunc("GET /api/games/{id}", s.getGame)
 	mux.HandleFunc("POST /api/games/{id}/placements", s.placeUnit)
 	mux.HandleFunc("POST /api/games/{id}/activate", s.activate)
@@ -73,6 +74,15 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, game.APIResponse{OK: true, Game: g, LegalActions: game.LegalActions(g), Messages: []string{"Game created."}})
+}
+
+func (s *Server) listGames(w http.ResponseWriter, r *http.Request) {
+	games, err := s.store.ListGames()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Games: games, Messages: []string{}})
 }
 
 func (s *Server) getGame(w http.ResponseWriter, r *http.Request) {

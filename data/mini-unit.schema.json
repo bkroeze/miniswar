@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/mini-unit.schema.json",
+  "title": "MiniUnit",
+  "description": "A single mini unit entry, based on page-089.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "Unit Name": {
+      "type": "string",
+      "minLength": 1
+    },
+      "Nation": {
+	  "type": "string",
+	  "minLength": 1
+      },
+      "Terrain": {
+	  "type": "array",
+	  "items": {
+	      "type": "string",
+	      "minLength": 1
+	  }
+    },
+    "A": {
+      "type": "integer"
+    },
+    "M": {
+      "type": "integer"
+    },
+    "F": {
+      "type": "integer"
+    },
+    "S": {
+      "type": "integer"
+    },
+    "D": {
+      "type": "integer"
+    },
+    "CD": {
+      "type": "integer"
+    },
+    "H": {
+      "type": "integer"
+    },
+    "Pts": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "Special": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "Base": {
+      "type": "string",
+      "minLength": 1
+    },
+    "Equipment": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "required": [
+    "Unit Name",
+      "Terrain",
+      "Nation",
+    "A",
+    "M",
+    "F",
+    "S",
+    "D",
+    "CD",
+    "H",
+    "Pts",
+    "Special",
+    "Base",
+    "Equipment"
+  ]
+}

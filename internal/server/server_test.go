@@ -81,6 +81,75 @@ func TestCreateActivateActionAndRewind(t *testing.T) {
 	}
 }
 
+func TestListGamesReturnsSummaries(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	srv := New(st, game.NewEngine(1)).Routes()
+	createBody := `{"battlemapId":"forest_wall","player1Units":[{"baseWidthMm":25,"baseDepthMm":25,"count":5}],"player2Units":[{"baseWidthMm":25,"baseDepthMm":25,"count":5}]}`
+	res := request(t, srv, http.MethodPost, "/api/games", createBody)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("create status %d: %s", res.Code, res.Body.String())
+	}
+	var created game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+
+	res = request(t, srv, http.MethodGet, "/api/games", "")
+	if res.Code != http.StatusOK {
+		t.Fatalf("list status %d: %s", res.Code, res.Body.String())
+	}
+	var listed game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Games) != 1 {
+		t.Fatalf("listed %d games, want 1", len(listed.Games))
+	}
+	summary := listed.Games[0]
+	if summary.ID != created.Game.ID {
+		t.Fatalf("summary ID %q, want %q", summary.ID, created.Game.ID)
+	}
+	if summary.BattlemapID != "forest_wall" || summary.Battlemap == "" {
+		t.Fatalf("summary battlemap = (%q, %q), want forest_wall with name", summary.BattlemapID, summary.Battlemap)
+	}
+	if summary.ActionCount != 0 {
+		t.Fatalf("summary action count %d, want 0", summary.ActionCount)
+	}
+	if summary.SnapshotCount != 1 {
+		t.Fatalf("summary snapshot count %d, want 1", summary.SnapshotCount)
+	}
+	if summary.UpdatedAt == "" {
+		t.Fatal("summary missing updated timestamp")
+	}
+
+	unit := firstUnplacedUnitForPlayer(created.Game, created.Game.ActivePlayer)
+	x, y := placementPoint(unit.PlayerID)
+	res = request(t, srv, http.MethodPost, "/api/games/"+created.Game.ID+"/placements", `{"playerId":`+itoa(unit.PlayerID)+`,"unitId":"`+unit.ID+`","x":`+itoa(x)+`,"y":`+itoa(y)+`}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("placement status %d: %s", res.Code, res.Body.String())
+	}
+
+	res = request(t, srv, http.MethodGet, "/api/games", "")
+	if res.Code != http.StatusOK {
+		t.Fatalf("list after placement status %d: %s", res.Code, res.Body.String())
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	summary = listed.Games[0]
+	if summary.ActionCount != 1 {
+		t.Fatalf("summary action count after placement %d, want 1", summary.ActionCount)
+	}
+	if summary.SnapshotCount != 2 {
+		t.Fatalf("summary snapshot count after placement %d, want 2", summary.SnapshotCount)
+	}
+}
+
 func request(t *testing.T, handler http.Handler, method, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(method, path, bytes.NewBufferString(body))

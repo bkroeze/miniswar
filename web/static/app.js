@@ -6,6 +6,9 @@ function createMiniswarApp() {
     messages: [],
     placementPreview: null,
     setupSidebarCollapsed: false,
+    loadGamesOpen: false,
+    savedGames: [],
+    savedGamesLoading: false,
     setup: {
       battlemapId: "old_road",
       player1: { base: "25x25", count: 12, units: [{ base: "25x25", count: 12 }] },
@@ -53,6 +56,40 @@ function createMiniswarApp() {
         await this.setGame(response.game, { resetSelection: true });
       }
       this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    async openLoadGames() {
+      this.loadGamesOpen = true;
+      this.savedGamesLoading = true;
+      const response = await this.api("/api/games");
+      this.savedGamesLoading = false;
+      if (response.ok) {
+        this.savedGames = response.games || [];
+      }
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    closeLoadGames() {
+      this.loadGamesOpen = false;
+    },
+
+    async loadGame(gameId) {
+      const response = await this.api(`/api/games/${gameId}`);
+      if (response.ok) {
+        this.placementPreview = null;
+        this.loadGamesOpen = false;
+        await this.setGame(response.game, { resetSelection: true });
+        this.messages = [`Loaded game ${gameId}.`];
+        return;
+      }
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    formatDate(value) {
+      if (!value) return "";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return date.toLocaleString();
     },
 
     async activate() {
@@ -113,7 +150,9 @@ function createMiniswarApp() {
         body: JSON.stringify({ actionIndex }),
       });
       if (response.ok) {
+        this.placementPreview = null;
         await this.setGame(response.game, { resetSelection: true });
+        this.renderArena();
       }
       this.messages = [...(response.messages || []), ...(response.errors || [])];
     },
@@ -238,6 +277,7 @@ function createMiniswarApp() {
 
     async setGame(game, options = {}) {
       this.game = game;
+      this.renderArena();
       if (this.isSetupPhase()) {
         this.selectedUnit = this.currentPlacementUnit()?.id || "";
         this.selectedMini = "";
@@ -259,6 +299,7 @@ function createMiniswarApp() {
       await this.$nextTick();
       await new Promise((resolve) => requestAnimationFrame(resolve));
       this.renderArena();
+      window.setTimeout(() => this.renderArena(), 0);
     },
 
     arenaPoint(event) {

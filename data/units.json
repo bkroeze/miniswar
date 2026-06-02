@@ -1,0 +1,2298 @@
+[
+  {
+    "Unit Name": "Dwarf King",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Capital Dwarf City"
+    ],
+    "A": 4,
+    "M": 5,
+    "F": 4,
+    "S": 0,
+    "D": 11,
+    "CD": 3,
+    "H": 3,
+    "Pts": 322,
+    "Special": [
+      "Command (2)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Prince",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Capital Dwarf City"
+    ],
+    "A": 4,
+    "M": 5,
+    "F": 3,
+    "S": 0,
+    "D": 11,
+    "CD": 2,
+    "H": 2,
+    "Pts": 165,
+    "Special": [
+      "Command (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf General",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Dwarf City"
+    ],
+    "A": 4,
+    "M": 5,
+    "F": 3,
+    "S": 0,
+    "D": 11,
+    "CD": 1,
+    "H": 2,
+    "Pts": 293,
+    "Special": [
+      "Command (2)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Captain",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Dwarf City"
+    ],
+    "A": 4,
+    "M": 5,
+    "F": 3,
+    "S": 0,
+    "D": 11,
+    "CD": 1,
+    "H": 1,
+    "Pts": 150,
+    "Special": [
+      "Command (1)",
+      "Shielding (1)",
+      "Magic Items"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Champion",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Dwarf City"
+    ],
+    "A": 4,
+    "M": 5,
+    "F": 4,
+    "S": 0,
+    "D": 11,
+    "CD": 3,
+    "H": 1,
+    "Pts": 62,
+    "Special": [
+      "Champion",
+      "Shielding (1)",
+      "Magic Items"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon",
+      "Shield",
+      "Heavy Armour"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Spellcaster 1",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Dwarf City"
+    ],
+    "A": 4,
+    "M": 5,
+    "F": 2,
+    "S": 0,
+    "D": 9,
+    "CD": 3,
+    "H": 2,
+    "Pts": 30,
+    "Special": [
+      "Spellcaster (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Spellcaster 2",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Dwarf City"
+    ],
+    "A": 4,
+    "M": 5,
+    "F": 2,
+    "S": 0,
+    "D": 9,
+    "CD": 3,
+    "H": 2,
+    "Pts": 60,
+    "Special": [
+      "Spellcaster (2)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Spellcaster 3",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Hermitage"
+    ],
+    "A": 4,
+    "M": 5,
+    "F": 2,
+    "S": 0,
+    "D": 9,
+    "CD": 3,
+    "H": 2,
+    "Pts": 110,
+    "Special": [
+      "Spellcaster (3)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Spellcaster 4",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Hermitage"
+    ],
+    "A": 4,
+    "M": 5,
+    "F": 2,
+    "S": 0,
+    "D": 9,
+    "CD": 3,
+    "H": 3,
+    "Pts": 200,
+    "Special": [
+      "Spellcaster (4)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Spellcaster 5",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Hermitage"
+    ],
+    "A": 4,
+    "M": 5,
+    "F": 2,
+    "S": 0,
+    "D": 9,
+    "CD": 3,
+    "H": 3,
+    "Pts": 270,
+    "Special": [
+      "Spellcaster (5)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Soldier",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Dwarf City"
+    ],
+    "A": 4,
+    "M": 5,
+    "F": 2,
+    "S": 0,
+    "D": 10,
+    "CD": 1,
+    "H": 1,
+    "Pts": 15,
+    "Special": [
+      "Shielding (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Spearman",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Dwarf City"
+    ],
+    "A": 4,
+    "M": 5,
+    "F": 2,
+    "S": 0,
+    "D": 10,
+    "CD": 1,
+    "H": 1,
+    "Pts": 16,
+    "Special": [
+      "Shielding (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Equipment: Spear"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Archer",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Dwarf City"
+    ],
+    "A": 4,
+    "M": 5,
+    "F": 0,
+    "S": 2,
+    "D": 10,
+    "CD": 1,
+    "H": 1,
+    "Pts": 15,
+    "Special": [
+      "Fire Over"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Equipment: Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Warrior",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Forges"
+    ],
+    "A": 4,
+    "M": 4,
+    "F": 2,
+    "S": 1,
+    "D": 11,
+    "CD": 1,
+    "H": 1,
+    "Pts": 17,
+    "Special": [
+      "Shielding (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Equipment: Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Linebreaker",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Forges"
+    ],
+    "A": 4,
+    "M": 4,
+    "F": 3,
+    "S": 0,
+    "D": 11,
+    "CD": 1,
+    "H": 1,
+    "Pts": 20,
+    "Special": [],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Two-Handed Weapon",
+      "Heavy Armour"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Light Catapult",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Lumber Yard"
+    ],
+    "A": 4,
+    "M": 3,
+    "F": 2,
+    "S": 3,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 120,
+    "Special": [
+      "Artillery"
+    ],
+    "Base": "100 x 50",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Dwarf Heavy Catapult",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Lumber Yard"
+    ],
+    "A": 4,
+    "M": 2,
+    "F": 2,
+    "S": 4,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 140,
+    "Special": [
+      "Artillery"
+    ],
+    "Base": "100 x 50",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Indrik",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Snow-capped Mountains"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 2,
+    "S": 0,
+    "D": 12,
+    "CD": 4,
+    "H": 5,
+    "Pts": 160,
+    "Special": [
+      "Monster"
+    ],
+    "Base": "50 x 50",
+    "Equipment": [
+      ""
+    ]
+  },
+  {
+    "Unit Name": "Eachy",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Tarns"
+    ],
+    "A": 7,
+    "M": 5,
+    "F": 4,
+    "S": 0,
+    "D": 12,
+    "CD": 3,
+    "H": 5,
+    "Pts": 120,
+    "Special": [
+      "Monster"
+    ],
+    "Base": "50 x 50",
+    "Equipment": [
+      ""
+    ]
+  },
+  {
+    "Unit Name": "Barghest",
+    "Nation": "Dwarf",
+    "Terrain": [
+      "Moors"
+    ],
+    "A": 4,
+    "M": 8,
+    "F": 3,
+    "S": 0,
+    "D": 11,
+    "CD": 4,
+    "H": 4,
+    "Pts": 200,
+    "Special": [
+      "Monster"
+    ],
+    "Base": "50 x 50",
+    "Equipment": []
+  },
+  {
+    "Unit Name": "Human King",
+    "Nation": "Human",
+    "Terrain": [
+      "Human Capital City"
+    ],
+    "A": 5,
+    "M": 6,
+    "F": 4,
+    "S": 0,
+    "D": 10,
+    "CD": 3,
+    "H": 3,
+    "Pts": 279,
+    "Special": [
+      "Command (2)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Prince",
+    "Nation": "Human",
+    "Terrain": [
+      "Human Capital City"
+    ],
+    "A": 5,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 10,
+    "CD": 2,
+    "H": 2,
+    "Pts": 145,
+    "Special": [
+      "Command (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human General",
+    "Nation": "Human",
+    "Terrain": [
+      "Human City"
+    ],
+    "A": 5,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 10,
+    "CD": 1,
+    "H": 2,
+    "Pts": 260,
+    "Special": [
+      "Command (2)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Captain",
+    "Nation": "Human",
+    "Terrain": [
+      "Human City"
+    ],
+    "A": 5,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 10,
+    "CD": 1,
+    "H": 1,
+    "Pts": 133,
+    "Special": [
+      "Command (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Champion",
+    "Nation": "Human",
+    "Terrain": [
+      "Human City"
+    ],
+    "A": 5,
+    "M": 6,
+    "F": 4,
+    "S": 0,
+    "D": 10,
+    "CD": 3,
+    "H": 1,
+    "Pts": 51,
+    "Special": [
+      "Champion"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Spellcaster 1",
+    "Nation": "Human",
+    "Terrain": [
+      "Human City"
+    ],
+    "A": 5,
+    "M": 6,
+    "F": 2,
+    "S": 0,
+    "D": 8,
+    "CD": 3,
+    "H": 2,
+    "Pts": 50,
+    "Special": [
+      "Spellcaster (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Spellcaster 2",
+    "Nation": "Human",
+    "Terrain": [
+      "Human City"
+    ],
+    "A": 5,
+    "M": 6,
+    "F": 2,
+    "S": 0,
+    "D": 8,
+    "CD": 3,
+    "H": 2,
+    "Pts": 100,
+    "Special": [
+      "Spellcaster (2)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Spellcaster 3",
+    "Nation": "Human",
+    "Terrain": [
+      "Monastery"
+    ],
+    "A": 5,
+    "M": 6,
+    "F": 2,
+    "S": 0,
+    "D": 8,
+    "CD": 3,
+    "H": 2,
+    "Pts": 200,
+    "Special": [
+      "Spellcaster (3)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Spellcaster 4",
+    "Nation": "Human",
+    "Terrain": [
+      "Monastery"
+    ],
+    "A": 5,
+    "M": 6,
+    "F": 2,
+    "S": 0,
+    "D": 8,
+    "CD": 3,
+    "H": 3,
+    "Pts": 300,
+    "Special": [
+      "Spellcaster (4)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Spellcaster 5",
+    "Nation": "Human",
+    "Terrain": [
+      "Monastery"
+    ],
+    "A": 5,
+    "M": 6,
+    "F": 2,
+    "S": 0,
+    "D": 8,
+    "CD": 3,
+    "H": 3,
+    "Pts": 400,
+    "Special": [
+      "Spellcaster (5)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Soldier",
+    "Nation": "Human",
+    "Terrain": [
+      "Human City"
+    ],
+    "A": 5,
+    "M": 6,
+    "F": 2,
+    "S": 0,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 12,
+    "Special": [
+      "Shielding (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "    Hand Weapon",
+      "Shield",
+      "Light Armour  "
+    ]
+  },
+  {
+    "Unit Name": "Human Spearman",
+    "Nation": "Human",
+    "Terrain": [
+      "Human City"
+    ],
+    "A": 5,
+    "M": 6,
+    "F": 2,
+    "S": 0,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 13,
+    "Special": [
+      "Shielding (1)",
+      "Brace"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "    Spear",
+      "Shield",
+      "Light Armour  "
+    ]
+  },
+  {
+    "Unit Name": "Human Archer",
+    "Nation": "Human",
+    "Terrain": [
+      "Human City"
+    ],
+    "A": 5,
+    "M": 6,
+    "F": 0,
+    "S": 2,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 12,
+    "Special": [
+      "Fire Over"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Warrior",
+    "Nation": "Human",
+    "Terrain": [
+      "Iron Mines"
+    ],
+    "A": 5,
+    "M": 5,
+    "F": 2,
+    "S": 0,
+    "D": 10,
+    "CD": 1,
+    "H": 1,
+    "Pts": 14,
+    "Special": [
+      "Shielding (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Linebreaker",
+    "Nation": "Human",
+    "Terrain": [
+      "Iron Mines"
+    ],
+    "A": 5,
+    "M": 5,
+    "F": 3,
+    "S": 0,
+    "D": 10,
+    "CD": 1,
+    "H": 1,
+    "Pts": 17,
+    "Special": [],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Two-Handed Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Militia",
+    "Nation": "Human",
+    "Terrain": [
+      "Human City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 2,
+    "S": 0,
+    "D": 8,
+    "CD": 1,
+    "H": 1,
+    "Pts": 9,
+    "Special": [
+      "Shielding (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Ranger",
+    "Nation": "Human",
+    "Terrain": [
+      "Barrens"
+    ],
+    "A": 5,
+    "M": 6,
+    "F": 0,
+    "S": 2,
+    "D": 8,
+    "CD": 1,
+    "H": 1,
+    "Pts": 14,
+    "Special": [
+      "Nimble"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Mounted Rangers",
+    "Nation": "Human",
+    "Terrain": [
+      "Barrens"
+    ],
+    "A": 5,
+    "M": 8,
+    "F": 1,
+    "S": 2,
+    "D": 10,
+    "CD": 2,
+    "H": 1,
+    "Pts": 24,
+    "Special": [
+      "Aimed Fire"
+    ],
+    "Base": "25 x 50",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Cavalry",
+    "Nation": "Human",
+    "Terrain": [
+      "Plains"
+    ],
+    "A": 5,
+    "M": 8,
+    "F": 3,
+    "S": 0,
+    "D": 12,
+    "CD": 2,
+    "H": 1,
+    "Pts": 45,
+    "Special": [
+      "Charge (3)"
+    ],
+    "Base": "25 x 50",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Heavy Cavalry",
+    "Nation": "Human",
+    "Terrain": [
+      "Plains"
+    ],
+    "A": 5,
+    "M": 8,
+    "F": 3,
+    "S": 0,
+    "D": 13,
+    "CD": 2,
+    "H": 1,
+    "Pts": 50,
+    "Special": [
+      "Charge (3)"
+    ],
+    "Base": "25 x 50",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Human Heavy Catapult",
+    "Nation": "Human",
+    "Terrain": [
+      "Timber Mills"
+    ],
+    "A": 5,
+    "M": 2,
+    "F": 2,
+    "S": 4,
+    "D": 8,
+    "CD": 1,
+    "H": 1,
+    "Pts": 120,
+    "Special": [
+      "Artillery"
+    ],
+    "Base": "100 x 50",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Ogre",
+    "Nation": "Human",
+    "Terrain": [
+      "Rough Hills"
+    ],
+    "A": 7,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 11,
+    "CD": 3,
+    "H": 3,
+    "Pts": 40,
+    "Special": [
+      "Champion"
+    ],
+    "Base": "50 x 50",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Ogre Linebreaker",
+    "Nation": "Human",
+    "Terrain": [
+      "Rough Hills"
+    ],
+    "A": 7,
+    "M": 6,
+    "F": 4,
+    "S": 0,
+    "D": 11,
+    "CD": 3,
+    "H": 3,
+    "Pts": 45,
+    "Special": [
+      "Champion"
+    ],
+    "Base": "50 x 50",
+    "Equipment": [
+      "Two-Handed Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Buggane",
+    "Nation": "Human",
+    "Terrain": [
+      "Sea Caves"
+    ],
+    "A": 4,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 11,
+    "CD": 3,
+    "H": 5,
+    "Pts": 450,
+    "Special": [
+      "Monster"
+    ],
+    "Base": "50 x 50",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Giant",
+    "Nation": "Human",
+    "Terrain": [
+      "Rocky Mountains"
+    ],
+    "A": 7,
+    "M": 7,
+    "F": 6,
+    "S": 0,
+    "D": 13,
+    "CD": 5,
+    "H": 12,
+    "Pts": 350,
+    "Special": [
+      "Monster"
+    ],
+    "Base": "100 x 50",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Elf Prince or Princess",
+    "Nation": "Elf",
+    "Terrain": [
+      "Elf Capital City"
+    ],
+    "A": 3,
+    "M": 6,
+    "F": 4,
+    "S": 0,
+    "D": 10,
+    "CD": 2,
+    "H": 2,
+    "Pts": 189,
+    "Special": [
+      "Command (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Elf General",
+    "Nation": "Elf",
+    "Terrain": [
+      "Elf City"
+    ],
+    "A": 3,
+    "M": 6,
+    "F": 4,
+    "S": 0,
+    "D": 10,
+    "CD": 1,
+    "H": 2,
+    "Pts": 329,
+    "Special": [
+      "Command (2)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Elf Captain",
+    "Nation": "Elf",
+    "Terrain": [
+      "Elf City"
+    ],
+    "A": 3,
+    "M": 6,
+    "F": 4,
+    "S": 0,
+    "D": 10,
+    "CD": 1,
+    "H": 1,
+    "Pts": 174,
+    "Special": [
+      "Command (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Elf Champion",
+    "Nation": "Elf",
+    "Terrain": [
+      "Elf City"
+    ],
+    "A": 3,
+    "M": 6,
+    "F": 5,
+    "S": 0,
+    "D": 10,
+    "CD": 3,
+    "H": 1,
+    "Pts": 74,
+    "Special": [
+      "Champion"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Elf Spellcaster 1",
+    "Nation": "Elf",
+    "Terrain": [
+      "Elf City"
+    ],
+    "A": 3,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 8,
+    "CD": 3,
+    "H": 2,
+    "Pts": 60,
+    "Special": [
+      "Spellcaster (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Elf Spellcaster 2",
+    "Nation": "Elf",
+    "Terrain": [
+      "Elf City"
+    ],
+    "A": 3,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 8,
+    "CD": 3,
+    "H": 2,
+    "Pts": 130,
+    "Special": [
+      "Spellcaster (2)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Elf Spellcaster 3",
+    "Nation": "Elf",
+    "Terrain": [
+      "Towers"
+    ],
+    "A": 3,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 8,
+    "CD": 3,
+    "H": 2,
+    "Pts": 240,
+    "Special": [
+      "Spellcaster (3)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Elf Spellcaster 4",
+    "Nation": "Elf",
+    "Terrain": [
+      "Towers"
+    ],
+    "A": 3,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 8,
+    "CD": 3,
+    "H": 3,
+    "Pts": 350,
+    "Special": [
+      "Spellcaster (4)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Elf Spellcaster 5",
+    "Nation": "Elf",
+    "Terrain": [
+      "Towers"
+    ],
+    "A": 3,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 8,
+    "CD": 3,
+    "H": 3,
+    "Pts": 490,
+    "Special": [
+      "Spellcaster (5)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Elf Soldier",
+    "Nation": "Elf",
+    "Terrain": [
+      "Elf City"
+    ],
+    "A": 3,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 20,
+    "Special": [
+      "Shielding (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Elf Spearman",
+    "Nation": "Elf",
+    "Terrain": [
+      "Elf City"
+    ],
+    "A": 3,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 22,
+    "Special": [
+      "Shielding (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Spear"
+    ]
+  },
+  {
+    "Unit Name": "Elf Archer",
+    "Nation": "Elf",
+    "Terrain": [
+      "Elf City"
+    ],
+    "A": 3,
+    "M": 6,
+    "F": 1,
+    "S": 3,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 24,
+    "Special": [
+      "Fire Over"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Elf Pathguard",
+    "Nation": "Elf",
+    "Terrain": [
+      "Forest"
+    ],
+    "A": 3,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 8,
+    "CD": 1,
+    "H": 1,
+    "Pts": 22,
+    "Special": [
+      "Shielding (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Elf Cavalry",
+    "Nation": "Elf",
+    "Terrain": [
+      "Grasslands"
+    ],
+    "A": 3,
+    "M": 8,
+    "F": 4,
+    "S": 0,
+    "D": 12,
+    "CD": 2,
+    "H": 1,
+    "Pts": 70,
+    "Special": [
+      "Charge (3)"
+    ],
+    "Base": "25 x 50",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Elf Mounted Ranger",
+    "Nation": "Elf",
+    "Terrain": [
+      "Grasslands"
+    ],
+    "A": 3,
+    "M": 8,
+    "F": 2,
+    "S": 3,
+    "D": 10,
+    "CD": 1,
+    "H": 1,
+    "Pts": 55,
+    "Special": [
+      "Aimed Fire"
+    ],
+    "Base": "25 x 50",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Elf Hunt Master",
+    "Nation": "Elf",
+    "Terrain": [
+      "Kennels"
+    ],
+    "A": 3,
+    "M": 8,
+    "F": 2,
+    "S": 0,
+    "D": 8,
+    "CD": 1,
+    "H": 1,
+    "Pts": 20,
+    "Special": [
+      "Nimble"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hunt Master: Hand Weapon; Dogs: None"
+    ]
+  },
+  {
+    "Unit Name": "Elf Ballista",
+    "Nation": "Elf",
+    "Terrain": [
+      "Outposts"
+    ],
+    "A": 3,
+    "M": 3,
+    "F": 3,
+    "S": 4,
+    "D": 8,
+    "CD": 1,
+    "H": 1,
+    "Pts": 120,
+    "Special": [
+      "Artillery"
+    ],
+    "Base": "50 x 50",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Lindwurm",
+    "Nation": "Elf",
+    "Terrain": [
+      "Hill Caves"
+    ],
+    "A": 3,
+    "M": 8,
+    "F": 5,
+    "S": 0,
+    "D": 12,
+    "CD": 5,
+    "H": 8,
+    "Pts": 500,
+    "Special": [
+      "Monster"
+    ],
+    "Base": "100 x 50",
+    "Equipment": [
+      "None"
+    ]
+  },
+  {
+    "Unit Name": "Giant Spider",
+    "Nation": "Elf",
+    "Terrain": [
+      "Dark Forest"
+    ],
+    "A": 5,
+    "M": 5,
+    "F": 3,
+    "S": 0,
+    "D": 11,
+    "CD": 3,
+    "H": 3,
+    "Pts": 48,
+    "Special": [
+      "Horrific"
+    ],
+    "Base": "50 x 50",
+    "Equipment": []
+  },
+  {
+    "Unit Name": "Wulver",
+    "Nation": "Elf",
+    "Terrain": [
+      "Dark Forest"
+    ],
+    "A": 5,
+    "M": 7,
+    "F": 3,
+    "S": 0,
+    "D": 10,
+    "CD": 3,
+    "H": 3,
+    "Pts": 80,
+    "Special": [
+      "Horrific"
+    ],
+    "Base": "50 x 50",
+    "Equipment": []
+  },
+  {
+    "Unit Name": "Goblin King",
+    "Nation": "Goblin",
+    "Terrain": [
+      "Goblin Capital City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 10,
+    "CD": 3,
+    "H": 3,
+    "Pts": 245,
+    "Special": [
+      "Command (2)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Goblin Advisor",
+    "Nation": "Goblin",
+    "Terrain": [
+      "Goblin Capital City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 2,
+    "S": 0,
+    "D": 10,
+    "CD": 2,
+    "H": 2,
+    "Pts": 124,
+    "Special": [
+      "Command (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Goblin General",
+    "Nation": "Goblin",
+    "Terrain": [
+      "Goblin City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 2,
+    "S": 0,
+    "D": 10,
+    "CD": 1,
+    "H": 2,
+    "Pts": 227,
+    "Special": [
+      "Command (2)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Goblin Captain",
+    "Nation": "Goblin",
+    "Terrain": [
+      "Goblin City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 2,
+    "S": 0,
+    "D": 10,
+    "CD": 1,
+    "H": 1,
+    "Pts": 114,
+    "Special": [
+      "Command (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "    Hand Weapon",
+      "Shield",
+      "Heavy Armour  "
+    ]
+  },
+  {
+    "Unit Name": "Goblin Champion",
+    "Nation": "Goblin",
+    "Terrain": [
+      "Goblin City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 10,
+    "CD": 3,
+    "H": 1,
+    "Pts": 37,
+    "Special": [
+      "Champion"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "    Hand Weapon",
+      "Shield",
+      "Heavy Armour  "
+    ]
+  },
+  {
+    "Unit Name": "Goblin Spellcaster 1",
+    "Nation": "Goblin",
+    "Terrain": [
+      "Goblin City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 1,
+    "S": 0,
+    "D": 8,
+    "CD": 3,
+    "H": 2,
+    "Pts": 40,
+    "Special": [
+      "Spellcaster (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Goblin Spellcaster 2",
+    "Nation": "Goblin",
+    "Terrain": [
+      "Goblin City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 1,
+    "S": 0,
+    "D": 8,
+    "CD": 3,
+    "H": 2,
+    "Pts": 80,
+    "Special": [
+      "Spellcaster (2)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Goblin Spellcaster 3",
+    "Nation": "Goblin",
+    "Terrain": [
+      "Dungeon"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 1,
+    "S": 0,
+    "D": 8,
+    "CD": 3,
+    "H": 2,
+    "Pts": 180,
+    "Special": [
+      "Spellcaster (3)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Goblin Spellcaster 4",
+    "Nation": "Goblin",
+    "Terrain": [
+      "Dungeon"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 1,
+    "S": 0,
+    "D": 8,
+    "CD": 3,
+    "H": 3,
+    "Pts": 260,
+    "Special": [
+      "Spellcaster (4)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Goblin Spellcaster 5",
+    "Nation": "Goblin",
+    "Terrain": [
+      "Dungeon"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 1,
+    "S": 0,
+    "D": 8,
+    "CD": 3,
+    "H": 3,
+    "Pts": 340,
+    "Special": [
+      "Spellcaster (5)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Goblin Soldier",
+    "Nation": "Goblin",
+    "Terrain": [
+      "Goblin City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 1,
+    "S": 0,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 10,
+    "Special": [
+      "Charge (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Goblin Spearman",
+    "Nation": "Goblin",
+    "Terrain": [
+      "Goblin City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 1,
+    "S": 0,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 11,
+    "Special": [
+      "Charge (1)",
+      "Shielding (1)",
+      "Brace"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Spear",
+      "Shield",
+      "Light Armour"
+    ]
+  },
+  {
+    "Unit Name": "Goblin Archer",
+    "Nation": "Goblin",
+    "Terrain": [
+      "Goblin City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 0,
+    "S": 1,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 10,
+    "Special": [
+      "Fire Over"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon",
+      "Bow",
+      "Light Armour"
+    ]
+  },
+  {
+    "Unit Name": "Goblin Slave",
+    "Nation": "Goblin",
+    "Terrain": [
+      "Slave Camps"
+    ],
+    "A": 7,
+    "M": 6,
+    "F": 0,
+    "S": 0,
+    "D": 8,
+    "CD": 1,
+    "H": 1,
+    "Pts": 6,
+    "Special": [
+      "Charge (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Goblin Slave Slinger",
+    "Nation": "Goblin",
+    "Terrain": [
+      "Slave Camps"
+    ],
+    "A": 7,
+    "M": 6,
+    "F": 0,
+    "S": 0,
+    "D": 8,
+    "CD": 1,
+    "H": 1,
+    "Pts": 6,
+    "Special": [],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Orc King",
+    "Nation": "Orc",
+    "Terrain": [
+      "Orc Capital City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 4,
+    "S": 0,
+    "D": 10,
+    "CD": 3,
+    "H": 3,
+    "Pts": 279,
+    "Special": [
+      "Command (2)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Orc Prince",
+    "Nation": "Orc",
+    "Terrain": [
+      "Orc Capital City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 10,
+    "CD": 2,
+    "H": 2,
+    "Pts": 145,
+    "Special": [
+      "Command (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Orc General",
+    "Nation": "Orc",
+    "Terrain": [
+      "Orc City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 10,
+    "CD": 1,
+    "H": 2,
+    "Pts": 260,
+    "Special": [
+      "Command (2)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Orc Captain",
+    "Nation": "Orc",
+    "Terrain": [
+      "Orc City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 3,
+    "S": 0,
+    "D": 10,
+    "CD": 1,
+    "H": 1,
+    "Pts": 133,
+    "Special": [
+      "Command (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Orc Champion",
+    "Nation": "Orc",
+    "Terrain": [
+      "Orc City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 4,
+    "S": 0,
+    "D": 10,
+    "CD": 3,
+    "H": 1,
+    "Pts": 49,
+    "Special": [
+      "Champion"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "    Hand Weapon",
+      "Shield",
+      "Heavy Armour  "
+    ]
+  },
+  {
+    "Unit Name": "Orc Spellcaster 1",
+    "Nation": "Orc",
+    "Terrain": [
+      "Orc City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 1,
+    "S": 0,
+    "D": 9,
+    "CD": 3,
+    "H": 2,
+    "Pts": 50,
+    "Special": [
+      "Spellcaster (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "    Hand Weapon  "
+    ]
+  },
+  {
+    "Unit Name": "Orc Spellcaster 2",
+    "Nation": "Orc",
+    "Terrain": [
+      "Orc City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 1,
+    "S": 0,
+    "D": 9,
+    "CD": 3,
+    "H": 2,
+    "Pts": 100,
+    "Special": [
+      "Spellcaster (2)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "    Hand Weapon  "
+    ]
+  },
+  {
+    "Unit Name": "Orc Spellcaster 3",
+    "Nation": "Orc",
+    "Terrain": [
+      "Dungeons"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 1,
+    "S": 0,
+    "D": 9,
+    "CD": 3,
+    "H": 2,
+    "Pts": 200,
+    "Special": [
+      "Spellcaster (3)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "    Hand Weapon  "
+    ]
+  },
+  {
+    "Unit Name": "Orc Spellcaster 4",
+    "Nation": "Orc",
+    "Terrain": [
+      "Dungeons"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 1,
+    "S": 0,
+    "D": 9,
+    "CD": 3,
+    "H": 3,
+    "Pts": 300,
+    "Special": [
+      "Spellcaster (4)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "    Hand Weapon  "
+    ]
+  },
+  {
+    "Unit Name": "Orc Spellcaster 5",
+    "Nation": "Orc",
+    "Terrain": [
+      "Dungeons"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 1,
+    "S": 0,
+    "D": 9,
+    "CD": 3,
+    "H": 3,
+    "Pts": 400,
+    "Special": [
+      "Spellcaster (5)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "    Hand Weapon  "
+    ]
+  },
+  {
+    "Unit Name": "Orc Soldier",
+    "Nation": "Orc",
+    "Terrain": [
+      "Orc City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 2,
+    "S": 0,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 13,
+    "Special": [
+      "Charge (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Orc Spearman",
+    "Nation": "Orc",
+    "Terrain": [
+      "Orc City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 2,
+    "S": 0,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 14,
+    "Special": [
+      "Charge (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Spear"
+    ]
+  },
+  {
+    "Unit Name": "Orc Archer",
+    "Nation": "Orc",
+    "Terrain": [
+      "Orc City"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 0,
+    "S": 2,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 14,
+    "Special": [
+      "Charge (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Orc Warrior",
+    "Nation": "Orc",
+    "Terrain": [
+      "Smithies"
+    ],
+    "A": 6,
+    "M": 5,
+    "F": 3,
+    "S": 0,
+    "D": 10,
+    "CD": 1,
+    "H": 1,
+    "Pts": 15,
+    "Special": [
+      "Charge (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Orc Linebreaker",
+    "Nation": "Orc",
+    "Terrain": [
+      "Smithies"
+    ],
+    "A": 6,
+    "M": 5,
+    "F": 4,
+    "S": 0,
+    "D": 10,
+    "CD": 1,
+    "H": 1,
+    "Pts": 18,
+    "Special": [
+      "Charge (1)"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Two-Handed Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Wolf",
+    "Nation": "Orc",
+    "Terrain": [
+      "Dark Hills"
+    ],
+    "A": 6,
+    "M": 8,
+    "F": 1,
+    "S": 0,
+    "D": 8,
+    "CD": 1,
+    "H": 1,
+    "Pts": 12,
+    "Special": [
+      "Charge (1)"
+    ],
+    "Base": "25 x 50",
+    "Equipment": []
+  },
+  {
+    "Unit Name": "Goblin Wolf Rider",
+    "Nation": "Orc",
+    "Terrain": [
+      "Dark Hills"
+    ],
+    "A": 6,
+    "M": 8,
+    "F": 2,
+    "S": 0,
+    "D": 11,
+    "CD": 2,
+    "H": 1,
+    "Pts": 20,
+    "Special": [
+      "Charge (2)"
+    ],
+    "Base": "25 x 50",
+    "Equipment": [
+      "hand weapon"
+    ]
+  },
+  {
+    "Unit Name": "Goblin Wolf Rider Scout",
+    "Nation": "Orc",
+    "Terrain": [
+      "Dark Hills"
+    ],
+    "A": 6,
+    "M": 8,
+    "F": 1,
+    "S": 1,
+    "D": 11,
+    "CD": 2,
+    "H": 1,
+    "Pts": 24,
+    "Special": [
+      "Charge (1)"
+    ],
+    "Base": "25 x 50",
+    "Equipment": [
+      "hand weapon"
+    ]
+  },
+  {
+    "Unit Name": "Goblin Light Catapult",
+    "Nation": "Orc",
+    "Terrain": [
+      "Ruined Villages"
+    ],
+    "A": 6,
+    "M": 3,
+    "F": 1,
+    "S": 3,
+    "D": 8,
+    "CD": 1,
+    "H": 1,
+    "Pts": 80,
+    "Special": [
+      "Artillery"
+    ],
+    "Base": "100 x 50",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Orc Heavy Catapult",
+    "Nation": "Orc",
+    "Terrain": [
+      "Ruined Villages"
+    ],
+    "A": 6,
+    "M": 2,
+    "F": 3,
+    "S": 4,
+    "D": 9,
+    "CD": 1,
+    "H": 1,
+    "Pts": 120,
+    "Special": [
+      "Artillery"
+    ],
+    "Base": "100 x 50",
+    "Equipment": [
+      "Hand Weapon"
+    ]
+  },
+  {
+    "Unit Name": "Troll",
+    "Nation": "Orc",
+    "Terrain": [
+      "Rivers"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 4,
+    "S": 0,
+    "D": 10,
+    "CD": 3,
+    "H": 3,
+    "Pts": 65,
+    "Special": [
+      "Champion"
+    ],
+    "Base": "50 x 50",
+    "Equipment": []
+  },
+  {
+    "Unit Name": "Knucker",
+    "Nation": "Orc",
+    "Terrain": [
+      "Poisonous Swamps"
+    ],
+    "A": 6,
+    "M": 6,
+    "F": 6,
+    "S": 0,
+    "D": 13,
+    "CD": 5,
+    "H": 8,
+    "Pts": 500,
+    "Special": [
+      "Monster"
+    ],
+    "Base": "100 x 50",
+    "Equipment": []
+  },
+  {
+    "Unit Name": "Gargoyle",
+    "Nation": "Unaligned",
+    "Terrain": [
+      "Ancient Ruins"
+    ],
+    "A": 5,
+    "M": 6,
+    "F": 2,
+    "S": 0,
+    "D": 10,
+    "CD": 1,
+    "H": 1,
+    "Pts": 24,
+    "Special": [
+      "Flying"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "Hand Weapon or None"
+    ]
+  },
+  {
+    "Unit Name": "Bodach",
+    "Nation": "Unaligned",
+    "Terrain": [
+      "Glade"
+    ],
+    "A": 2,
+    "M": 6,
+    "F": 1,
+    "S": 0,
+    "D": 10,
+    "CD": 2,
+    "H": 3,
+    "Pts": 400,
+    "Special": [
+      "Monster"
+    ],
+    "Base": "25 x 25",
+    "Equipment": [
+      "None"
+    ]
+  }
+]

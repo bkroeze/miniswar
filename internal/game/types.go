@@ -131,11 +131,25 @@ type SnapshotRecord struct {
 type APIResponse struct {
 	OK           bool          `json:"ok"`
 	Game         *Game         `json:"game,omitempty"`
+	Games        []GameSummary `json:"games,omitempty"`
 	Action       *ActionRecord `json:"action,omitempty"`
 	Roll         []int         `json:"roll,omitempty"`
 	LegalActions []string      `json:"legalActions,omitempty"`
 	Messages     []string      `json:"messages"`
 	Errors       []string      `json:"errors,omitempty"`
+}
+
+type GameSummary struct {
+	ID            string `json:"id"`
+	CreatedAt     string `json:"createdAt"`
+	UpdatedAt     string `json:"updatedAt"`
+	Round         int    `json:"round"`
+	Phase         string `json:"phase"`
+	ActivePlayer  int    `json:"activePlayer"`
+	BattlemapID   string `json:"battlemapId"`
+	Battlemap     string `json:"battlemap"`
+	ActionCount   int    `json:"actionCount"`
+	SnapshotCount int    `json:"snapshotCount"`
 }
 
 type ActivateRequest struct {

@@ -85,6 +85,45 @@ func (s *Store) GetGame(id string) (*game.Game, error) {
 	return &g, nil
 }
 
+func (s *Store) ListGames() ([]game.GameSummary, error) {
+	rows, err := s.db.Query(`
+select g.id, g.state_json, g.created_at, g.updated_at, count(s.action_index)
+from games g
+left join snapshots s on s.game_id = g.id
+group by g.id, g.state_json, g.created_at, g.updated_at
+order by g.updated_at desc`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []game.GameSummary
+	for rows.Next() {
+		var id, state, created, updated string
+		var snapshots int
+		if err := rows.Scan(&id, &state, &created, &updated, &snapshots); err != nil {
+			return nil, err
+		}
+		var g game.Game
+		if err := json.Unmarshal([]byte(state), &g); err != nil {
+			return nil, err
+		}
+		out = append(out, game.GameSummary{
+			ID:            id,
+			CreatedAt:     created,
+			UpdatedAt:     updated,
+			Round:         g.Round,
+			Phase:         g.Phase,
+			ActivePlayer:  g.ActivePlayer,
+			BattlemapID:   g.Battlemap.ID,
+			Battlemap:     g.Battlemap.Name,
+			ActionCount:   len(g.ActionHistory),
+			SnapshotCount: snapshots,
+		})
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) SaveSnapshot(gameID string, actionIndex int, state string) error {
 	_, err := s.db.Exec(`
 insert or replace into snapshots(game_id, action_index, state_json, created_at)

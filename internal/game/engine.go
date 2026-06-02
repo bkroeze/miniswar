@@ -313,7 +313,7 @@ func (e *Engine) ApplyAction(g *Game, req ActionRequest) (*ActionRecord, error) 
 		if err != nil {
 			return nil, err
 		}
-		applyPivot(unit, anchor, req.FacingDeg)
+		applyPivot(unit, anchor, req.FacingDeg, g.Battlemap.Terrains, g.Units)
 		messages = append(messages, fmt.Sprintf("Pivoted to %d degrees around %s.", unit.FacingDeg, anchor.Key))
 	case ActionAboutFace:
 		if err := applyAboutFace(unit); err != nil {
@@ -413,13 +413,48 @@ func pivotAnchor(unit *Unit, key string) (Mini, error) {
 	return Mini{}, errors.New("unit has no officer to pivot around")
 }
 
-func applyPivot(unit *Unit, anchor Mini, facingDeg int) {
+func applyPivot(unit *Unit, anchor Mini, facingDeg int, terrains []TerrainZone, units []Unit) {
 	anchorX, anchorY := miniWorldCenter(*unit, anchor, unit.FacingDeg)
-	nextFacing := normalizeDeg(facingDeg)
-	relX, relY := rotatePoint(miniCenterX(anchor), miniCenterY(anchor), nextFacing)
-	unit.X = anchorX - relX
-	unit.Y = anchorY - relY
-	unit.FacingDeg = nextFacing
+	startFacing := unit.FacingDeg
+	targetFacing := normalizeDeg(facingDeg)
+	delta := shortestSignedDelta(startFacing, targetFacing)
+	if delta == 0 {
+		return
+	}
+	step := 1
+	if delta < 0 {
+		step = -1
+	}
+	for remaining := int(math.Abs(float64(delta))); remaining > 0; remaining-- {
+		nextFacing := normalizeDeg(unit.FacingDeg + step)
+		nextX, nextY := pivotOriginForAnchor(anchor, anchorX, anchorY, nextFacing)
+		candidate := *unit
+		candidate.X = nextX
+		candidate.Y = nextY
+		candidate.FacingDeg = nextFacing
+		if unitOverlapsTerrain(candidate, nextX, nextY, terrains, TerrainImpassable) || unitOverlapsAnyUnit(candidate, nextX, nextY, units) {
+			return
+		}
+		unit.X = nextX
+		unit.Y = nextY
+		unit.FacingDeg = nextFacing
+	}
+}
+
+func pivotOriginForAnchor(anchor Mini, anchorX, anchorY float64, facingDeg int) (float64, float64) {
+	relX, relY := rotatePoint(miniCenterX(anchor), miniCenterY(anchor), facingDeg)
+	return anchorX - relX, anchorY - relY
+}
+
+func shortestSignedDelta(from, to int) int {
+	delta := normalizeDeg(to) - normalizeDeg(from)
+	if delta > 180 {
+		delta -= 360
+	}
+	if delta < -180 {
+		delta += 360
+	}
+	return delta
 }
 
 func (g *Game) appendRecord(kind string, player int, unitID string, request, result any, messages []string) ActionRecord {

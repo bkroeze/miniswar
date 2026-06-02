@@ -488,6 +488,36 @@ func TestPivotUsesSelectedAnchorAsFixedAxis(t *testing.T) {
 	}
 }
 
+func TestPivotStopsBeforeOverlappingAdjacentFriendlyUnit(t *testing.T) {
+	engine := NewEngine(7)
+	g, err := engine.NewGame(Setup{
+		Player1Units: []UnitSetup{
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Units[0] = formationUnit("u1", 1, 100, 100, 0, 5)
+	g.Units[1] = formationUnit("p1-u2", 1, 100, 125, 0, 5)
+	g.Units[2] = formationUnit("u2", 2, 500, 100, 0, 5)
+	g.Phase = "awaiting_activation"
+	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 1}
+
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionPivot, FacingDeg: 90}); err != nil {
+		t.Fatal(err)
+	}
+	unit, _ := findUnit(g, "u1")
+	if unit.FacingDeg == 90 {
+		t.Fatal("pivot reached target despite adjacent friendly unit")
+	}
+	if unitOverlapsAnyUnit(*unit, unit.X, unit.Y, g.Units) {
+		t.Fatalf("pivot left unit overlapping another unit at facing %d", unit.FacingDeg)
+	}
+}
+
 func TestLegalActionsDoesNotExposeWheel(t *testing.T) {
 	g := &Game{CurrentActivation: &Activation{UnitID: "u1"}}
 	foundSkip := false

@@ -14,7 +14,10 @@
       <h1>Miniswar</h1>
       <p x-text="statusLine()"></p>
     </div>
-    <button type="button" @click="createGame()">New Game</button>
+    <div class="topbar-actions">
+      <button type="button" @click="openLoadGames()">Load Game</button>
+      <button type="button" @click="createGame()">New Game</button>
+    </div>
   </header>
 
   <main class="shell" :class="{ 'setup-active': isSetupPhase(), 'setup-collapsed': setupSidebarCollapsed }">
@@ -148,5 +151,42 @@
       </ol>
     </section>
   </main>
+
+  <div class="modal-backdrop" x-show="loadGamesOpen" @click.self="closeLoadGames()" x-cloak>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="load-game-title">
+      <div class="modal-header">
+        <h2 id="load-game-title">Load Game</h2>
+        <button type="button" @click="closeLoadGames()" aria-label="Close load game">Close</button>
+      </div>
+      <p class="modal-status" x-show="savedGamesLoading">Loading saved games...</p>
+      <p class="modal-status" x-show="!savedGamesLoading && savedGames.length === 0">No saved games found.</p>
+      <table class="games-table" x-show="!savedGamesLoading && savedGames.length > 0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Map</th>
+            <th>State</th>
+            <th>Actions / Entries</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="saved in savedGames" :key="saved.id">
+            <tr>
+              <td>
+                <span x-text="formatDate(saved.updatedAt)"></span>
+              </td>
+              <td x-text="saved.battlemap || saved.battlemapId"></td>
+              <td x-text="`Round ${saved.round}, ${saved.phase}`"></td>
+              <td x-text="`${saved.actionCount} / ${saved.snapshotCount}`"></td>
+              <td>
+                <button type="button" @click="loadGame(saved.id)">Load</button>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </section>
+  </div>
 </body>
 </html>

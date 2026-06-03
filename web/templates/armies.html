@@ -29,7 +29,7 @@
           <li>
             <button type="button" @click="selectTemplate(template.id)" :class="{ selected: mode === 'template' && selectedId === template.id }">
               <span x-text="template.name"></span>
-              <small x-text="`${template.totalPoints}/${template.targetPoints || 0} pts`"></small>
+              <small x-text="`${entityPoints(template, 'template')}/${template.targetPoints || 0} pts`"></small>
             </button>
           </li>
         </template>
@@ -41,7 +41,7 @@
           <li>
             <button type="button" @click="selectArmy(army.id)" :class="{ selected: mode === 'army' && selectedId === army.id }">
               <span x-text="army.name"></span>
-              <small x-text="`${army.totalPoints}/${army.targetPoints || 0} pts`"></small>
+              <small x-text="`${entityPoints(army, 'army')}/${army.targetPoints || 0} pts`"></small>
             </button>
           </li>
         </template>
@@ -94,42 +94,44 @@
       </div>
     </section>
 
-    <section class="roster-panel" x-show="selected">
-      <div class="roster-header">
-        <label>Name
-          <input x-model="selected.name" @change="saveSelectedMeta()">
-        </label>
-        <label>Target Points
-          <input type="number" min="0" x-model.number="selected.targetPoints" @change="saveSelectedMeta()">
-        </label>
-      </div>
-      <p class="points-warning" :class="{ off: selected.totalPoints === selected.targetPoints }" x-text="pointsLine()"></p>
-      <button type="button" x-show="mode === 'template'" @click="createArmyFromSelected()">Create Roster From Template</button>
+    <template x-if="selected">
+      <section class="roster-panel">
+        <div class="roster-header">
+          <label>Name
+            <input x-model="selected.name" @change="saveSelectedMeta()">
+          </label>
+          <label>Target Points
+            <input type="number" min="0" x-model.number="selected.targetPoints" @change="saveSelectedMeta()">
+          </label>
+        </div>
+        <p class="points-warning" :class="{ off: entityPoints(selected) === selected.targetPoints }" x-text="pointsLine()"></p>
+        <button type="button" x-show="mode === 'template'" @click="createArmyFromSelected()">Create Roster From Template</button>
 
-      <ol class="roster-units">
-        <template x-for="line in selected.units || []" :key="line.id">
-          <li>
-            <div>
-              <strong x-text="line.catalogUnit.unitName"></strong>
-              <small x-text="`${line.catalogUnit.pts} pts - ${line.catalogUnit.base}`"></small>
-            </div>
-            <label x-show="mode === 'template'">Default Moniker
-              <input x-model="line.defaultMoniker" @change="saveLine(line)">
-            </label>
-            <label x-show="mode === 'army'">Moniker
-              <input x-model="line.moniker" @change="saveLine(line)">
-            </label>
-            <label>Minis
-              <input type="number" min="1" x-model.number="line.miniCount" @change="saveLine(line)">
-            </label>
-            <label x-show="mode === 'army'">HP
-              <input type="number" min="0" :max="line.maxHealth" x-model.number="line.currentHealth" @change="saveLine(line)">
-            </label>
-            <button type="button" @click="removeLine(line)">Remove</button>
-          </li>
-        </template>
-      </ol>
-    </section>
+        <ol class="roster-units">
+          <template x-for="line in selected.units || []" :key="line.id">
+            <li>
+              <div>
+                <strong x-text="line.catalogUnit.unitName"></strong>
+                <small x-text="`${linePoints(line)} pts (${line.catalogUnit.pts} each) - ${line.catalogUnit.base}`"></small>
+              </div>
+              <label x-show="mode === 'template'">Default Moniker
+                <input x-model="line.defaultMoniker" @change="saveLine(line)">
+              </label>
+              <label x-show="mode === 'army'">Moniker
+                <input x-model="line.moniker" @change="saveLine(line)">
+              </label>
+              <label>Minis
+                <input type="number" min="1" x-model.number="line.miniCount" @input="syncSelectedListSummary()" @change="saveLine(line)">
+              </label>
+              <label x-show="mode === 'army'">HP
+                <input type="number" min="0" :max="line.maxHealth" x-model.number="line.currentHealth" @change="saveLine(line)">
+              </label>
+              <button type="button" @click="removeLine(line)">Remove</button>
+            </li>
+          </template>
+        </ol>
+      </section>
+    </template>
   </main>
 </body>
 </html>

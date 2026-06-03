@@ -50,18 +50,18 @@ func TestTemplateRosterAndArmyUnitSetup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tpl, err = st.AddTemplateUnit(tpl.ID, unit.ID, "Stone Watch", 2)
+	tpl, err = st.AddTemplateUnit(tpl.ID, unit.ID, "Stone Watch", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(tpl.Units) != 1 {
 		t.Fatalf("template units = %d, want 1", len(tpl.Units))
 	}
-	if tpl.Units[0].MiniCount == 20 {
-		t.Fatalf("mini count was not clamped to base max")
+	if tpl.Units[0].MiniCount != 3 {
+		t.Fatalf("default mini count = %d, want one 50x50 rank of 3", tpl.Units[0].MiniCount)
 	}
-	if tpl.TotalPoints != unit.Pts {
-		t.Fatalf("template points = %d, want %d", tpl.TotalPoints, unit.Pts)
+	if tpl.TotalPoints != unit.Pts*tpl.Units[0].MiniCount {
+		t.Fatalf("template points = %d, want %d", tpl.TotalPoints, unit.Pts*tpl.Units[0].MiniCount)
 	}
 
 	army, err := st.CreateArmyFromTemplate(tpl.ID, "Campaign Patrol")
@@ -92,6 +92,46 @@ func TestTemplateRosterAndArmyUnitSetup(t *testing.T) {
 	}
 	if setup.Stats.Pts != unit.Pts || setup.MaxHealth != unit.H || setup.CurrentHealth != unit.H {
 		t.Fatalf("setup did not preserve stats/health: %#v", setup)
+	}
+}
+
+func TestDefaultMiniCountUsesOneRank(t *testing.T) {
+	st := openTestStore(t)
+	units, err := st.CatalogUnits("Dwarf", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var infantry CatalogUnit
+	for _, unit := range units {
+		if unit.BaseWidthMM == 25 && unit.BaseDepthMM == 25 {
+			infantry = unit
+			break
+		}
+	}
+	if infantry.ID == "" {
+		t.Fatal("missing 25x25 infantry fixture")
+	}
+	tpl, err := st.CreateArmyTemplate("Rank Defaults", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tpl, err = st.AddTemplateUnit(tpl.ID, infantry.ID, "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tpl.Units[0].MiniCount != 5 {
+		t.Fatalf("default mini count = %d, want one 25x25 rank of 5", tpl.Units[0].MiniCount)
+	}
+	if tpl.TotalPoints != infantry.Pts*5 {
+		t.Fatalf("template points = %d, want %d", tpl.TotalPoints, infantry.Pts*5)
+	}
+
+	tpl, err = st.UpdateTemplateUnit(tpl.ID, tpl.Units[0].ID, tpl.Units[0].DefaultMoniker, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tpl.TotalPoints != infantry.Pts*7 {
+		t.Fatalf("updated template points = %d, want %d", tpl.TotalPoints, infantry.Pts*7)
 	}
 }
 

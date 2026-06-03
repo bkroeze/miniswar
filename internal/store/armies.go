@@ -244,7 +244,7 @@ func (s *Store) AddTemplateUnit(templateID, catalogUnitID, moniker string, miniC
 	id := newID("tunit")
 	order, _ := s.nextOrder("army_template_units", "template_id", templateID)
 	_, err = s.db.Exec(`insert into army_template_units(id, template_id, catalog_unit_id, default_moniker, mini_count, sort_order, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, templateID, catalogUnitID, moniker, validMiniCount(unit, miniCount), order, now(), now())
+		id, templateID, catalogUnitID, moniker, defaultMiniCount(unit, miniCount), order, now(), now())
 	if err != nil {
 		return ArmyTemplate{}, err
 	}
@@ -365,7 +365,7 @@ func (s *Store) AddArmyUnit(armyID, catalogUnitID, moniker string, miniCount int
 	id := newID("aunit")
 	order, _ := s.nextOrder("army_units", "army_id", armyID)
 	_, err = s.db.Exec(`insert into army_units(id, army_id, catalog_unit_id, moniker, mini_count, max_health, current_health, sort_order, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, armyID, catalogUnitID, moniker, validMiniCount(unit, miniCount), unit.H, unit.H, order, now(), now())
+		id, armyID, catalogUnitID, moniker, defaultMiniCount(unit, miniCount), unit.H, unit.H, order, now(), now())
 	if err != nil {
 		return Army{}, err
 	}
@@ -524,11 +524,11 @@ order by au.sort_order, au.created_at`, armyID)
 }
 
 func (s *Store) templatePoints(id string) (int, error) {
-	return queryInt(s.db, `select coalesce(sum(cu.pts), 0) from army_template_units atu join catalog_units cu on cu.id = atu.catalog_unit_id where atu.template_id = ?`, id)
+	return queryInt(s.db, `select coalesce(sum(cu.pts * atu.mini_count), 0) from army_template_units atu join catalog_units cu on cu.id = atu.catalog_unit_id where atu.template_id = ?`, id)
 }
 
 func (s *Store) armyPoints(id string) (int, error) {
-	return queryInt(s.db, `select coalesce(sum(cu.pts), 0) from army_units au join catalog_units cu on cu.id = au.catalog_unit_id where au.army_id = ?`, id)
+	return queryInt(s.db, `select coalesce(sum(cu.pts * au.mini_count), 0) from army_units au join catalog_units cu on cu.id = au.catalog_unit_id where au.army_id = ?`, id)
 }
 
 func (s *Store) nextOrder(table, column, id string) (int, error) {
@@ -582,6 +582,17 @@ func validMiniCount(unit CatalogUnit, count int) int {
 		return base.MaxMinis
 	}
 	return count
+}
+
+func defaultMiniCount(unit CatalogUnit, count int) int {
+	if count > 0 {
+		return validMiniCount(unit, count)
+	}
+	base, ok := game.Base(unit.BaseWidthMM, unit.BaseDepthMM)
+	if !ok {
+		return 1
+	}
+	return validMiniCount(unit, base.PerRank)
 }
 
 func slug(value string) string {

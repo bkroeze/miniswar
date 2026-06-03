@@ -467,7 +467,9 @@ function createArmiesManager() {
 
     async initArmies() {
       await Promise.all([this.loadFilters(), this.loadCatalog(), this.loadTemplates(), this.loadArmies()]);
-      if (this.templates[0]) await this.selectTemplate(this.templates[0].id);
+      const template = this.templateFromURL();
+      if (template) await this.selectTemplate(template.id);
+      else if (this.templates[0]) await this.selectTemplate(this.templates[0].id);
       else if (this.armies[0]) await this.selectArmy(this.armies[0].id);
     },
 
@@ -530,6 +532,7 @@ function createArmiesManager() {
         this.mode = "template";
         this.selectedId = id;
         this.selected = response.template;
+        this.updateTemplateURL(this.selected.name);
       }
     },
 
@@ -539,17 +542,21 @@ function createArmiesManager() {
         this.mode = "army";
         this.selectedId = id;
         this.selected = response.army;
+        this.clearTemplateURL();
       }
     },
 
     async saveSelectedMeta() {
       if (!this.selected) return;
+      this.syncSelectedListSummary();
       const path = this.mode === "template" ? `/api/army-templates/${this.selected.id}` : `/api/armies/${this.selected.id}`;
       const response = await this.api(path, {
         method: "PATCH",
         body: JSON.stringify({ name: this.selected.name, targetPoints: this.selected.targetPoints }),
       });
       if (response.ok) this.selected = this.mode === "template" ? response.template : response.army;
+      this.syncSelectedListSummary();
+      if (this.mode === "template") this.updateTemplateURL(this.selected.name);
       await Promise.all([this.loadTemplates(), this.loadArmies()]);
     },
 
@@ -560,14 +567,16 @@ function createArmiesManager() {
       const path = this.mode === "template" ? `/api/army-templates/${this.selected.id}/units` : `/api/armies/${this.selected.id}/units`;
       const response = await this.api(path, {
         method: "POST",
-        body: JSON.stringify({ catalogUnitId: unit.id, moniker: unit.unitName, miniCount: 1 }),
+        body: JSON.stringify({ catalogUnitId: unit.id, moniker: unit.unitName }),
       });
       if (response.ok) this.selected = this.mode === "template" ? response.template : response.army;
+      if (this.mode === "template") this.updateTemplateURL(this.selected.name);
       await Promise.all([this.loadTemplates(), this.loadArmies()]);
       this.messages = [...(response.messages || []), ...(response.errors || [])];
     },
 
     async saveLine(line) {
+      this.syncSelectedListSummary();
       const path =
         this.mode === "template"
           ? `/api/army-templates/${this.selected.id}/units/${line.id}`
@@ -581,7 +590,38 @@ function createArmiesManager() {
         }),
       });
       if (response.ok) this.selected = this.mode === "template" ? response.template : response.army;
+      this.syncSelectedListSummary();
+      if (this.mode === "template") this.updateTemplateURL(this.selected.name);
       await Promise.all([this.loadTemplates(), this.loadArmies()]);
+    },
+
+    syncSelectedListSummary() {
+      if (!this.selected) return;
+      const list = this.mode === "template" ? this.templates : this.armies;
+      const item = list.find((entry) => entry.id === this.selected.id);
+      if (!item) return;
+      item.name = this.selected.name;
+      item.targetPoints = this.selected.targetPoints;
+      item.totalPoints = this.entityPoints(this.selected);
+    },
+
+    templateFromURL() {
+      const name = new URLSearchParams(window.location.search).get("template");
+      if (!name) return null;
+      const normalized = name.trim().toLocaleLowerCase();
+      return this.templates.find((template) => template.name.trim().toLocaleLowerCase() === normalized) || null;
+    },
+
+    updateTemplateURL(name) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("template", name);
+      window.history.replaceState({}, "", url);
+    },
+
+    clearTemplateURL() {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("template");
+      window.history.replaceState({}, "", url);
     },
 
     async removeLine(line) {
@@ -591,14 +631,30 @@ function createArmiesManager() {
           : `/api/armies/${this.selected.id}/units/${line.id}`;
       const response = await this.api(path, { method: "DELETE" });
       if (response.ok) this.selected = this.mode === "template" ? response.template : response.army;
+      if (this.mode === "template") this.updateTemplateURL(this.selected.name);
       await Promise.all([this.loadTemplates(), this.loadArmies()]);
     },
 
     pointsLine() {
       if (!this.selected) return "";
       const target = this.selected.targetPoints || 0;
-      const total = this.selected.totalPoints || 0;
+      const total = this.entityPoints(this.selected);
       return total === target ? `${total}/${target} points` : `${total}/${target} points - total differs from target`;
+    },
+
+    linePoints(line) {
+      return (line.catalogUnit?.pts || 0) * (line.miniCount || 0);
+    },
+
+    entityPoints(entity, kind = "") {
+      if (!entity) return 0;
+      if (entity.units) {
+        return entity.units.reduce((total, line) => total + this.linePoints(line), 0);
+      }
+      if (this.selected && entity !== this.selected && entity.id === this.selected.id && (!kind || this.mode === kind)) {
+        return this.entityPoints(this.selected);
+      }
+      return entity.totalPoints || 0;
     },
 
     statusLine() {

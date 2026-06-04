@@ -3,20 +3,37 @@ package game
 import "time"
 
 const (
-	ActionActivate  = "activate"
-	ActionPlace     = "place"
-	ActionMove      = "move"
-	ActionPivot     = "pivot"
-	ActionAboutFace = "about_face"
-	ActionSkip      = "skip"
+	ActionActivate       = "activate"
+	ActionPlace          = "place"
+	ActionMove           = "move"
+	ActionPivot          = "pivot"
+	ActionAboutFace      = "about_face"
+	ActionSkip           = "skip"
+	ActionCombatPushback = "combat_pushback"
 
-	MovementLimitMM = 100
-	ArenaWidthMM    = 760
-	ArenaHeightMM   = 520
+	CombatChoicePushback25 = "pushback_25"
+	CombatChoicePushback75 = "pushback_75"
+	CombatChoiceWithdraw25 = "withdraw_25"
+	CombatChoiceDecline    = "decline"
 
-	TerrainRough      = "rough"
-	TerrainImpassable = "impassable"
-	TerrainPath       = "path"
+	UnitStatusDisordered = "disordered"
+	UnitStatusBroken     = "broken"
+
+	CombatFaceFront = "front"
+	CombatFaceRear  = "rear"
+	CombatFaceRight = "right"
+	CombatFaceLeft  = "left"
+
+	MovementLimitMM     = 100
+	ArenaWidthMM        = 760
+	ArenaHeightMM       = 520
+	BrokenMoraleRangeMM = 203.2
+	DefaultMiniHealth   = 1
+
+	TerrainRough            = "rough"
+	TerrainImpassable       = "impassable"
+	TerrainPath             = "path"
+	TerrainPassableObstacle = "passable_obstacle"
 )
 
 type BaseSize struct {
@@ -61,20 +78,23 @@ type UnitStats struct {
 }
 
 type Game struct {
-	ID                  string           `json:"id"`
-	Round               int              `json:"round"`
-	ActivePlayer        int              `json:"activePlayer"`
-	FirstPlayer         int              `json:"firstPlayer"`
-	Phase               string           `json:"phase"`
-	PlacementIndex      int              `json:"placementIndex"`
-	CurrentActivation   *Activation      `json:"currentActivation,omitempty"`
-	Units               []Unit           `json:"units"`
-	ActionHistory       []ActionRecord   `json:"actionHistory"`
-	Snapshots           []SnapshotRecord `json:"snapshots,omitempty"`
-	CreatedAt           time.Time        `json:"createdAt"`
-	RandomSeed          int64            `json:"randomSeed"`
-	OpeningInitiativeD2 int              `json:"openingInitiativeD2"`
-	Battlemap           Battlemap        `json:"battlemap"`
+	ID                  string               `json:"id"`
+	Round               int                  `json:"round"`
+	ActivePlayer        int                  `json:"activePlayer"`
+	FirstPlayer         int                  `json:"firstPlayer"`
+	Phase               string               `json:"phase"`
+	PlacementIndex      int                  `json:"placementIndex"`
+	CurrentActivation   *Activation          `json:"currentActivation,omitempty"`
+	Units               []Unit               `json:"units"`
+	ActionHistory       []ActionRecord       `json:"actionHistory"`
+	Snapshots           []SnapshotRecord     `json:"snapshots,omitempty"`
+	CreatedAt           time.Time            `json:"createdAt"`
+	RandomSeed          int64                `json:"randomSeed"`
+	RandomRollIndex     int                  `json:"randomRollIndex"`
+	OpeningInitiativeD2 int                  `json:"openingInitiativeD2"`
+	Battlemap           Battlemap            `json:"battlemap"`
+	Engagements         []CombatEngagement   `json:"engagements,omitempty"`
+	PendingCombatChoice *PendingCombatChoice `json:"pendingCombatChoice,omitempty"`
 }
 
 type Battlemap struct {
@@ -111,20 +131,122 @@ type Unit struct {
 	Y                float64   `json:"y"`
 	FacingDeg        int       `json:"facingDeg"`
 	Placed           bool      `json:"placed"`
+	Disordered       bool      `json:"disordered,omitempty"`
+	Broken           bool      `json:"broken,omitempty"`
 	Minis            []Mini    `json:"minis"`
 }
 
 type Mini struct {
-	Key       string  `json:"key"`
-	UnitID    string  `json:"unitId"`
-	Index     int     `json:"index"`
-	Rank      int     `json:"rank"`
-	File      int     `json:"file"`
-	RelX      float64 `json:"relX"`
-	RelY      float64 `json:"relY"`
-	WidthMM   int     `json:"widthMm"`
-	DepthMM   int     `json:"depthMm"`
-	IsOfficer bool    `json:"isOfficer"`
+	Key             string  `json:"key"`
+	UnitID          string  `json:"unitId"`
+	Index           int     `json:"index"`
+	Rank            int     `json:"rank"`
+	File            int     `json:"file"`
+	RelX            float64 `json:"relX"`
+	RelY            float64 `json:"relY"`
+	WidthMM         int     `json:"widthMm"`
+	DepthMM         int     `json:"depthMm"`
+	IsOfficer       bool    `json:"isOfficer"`
+	HealthRemaining int     `json:"healthRemaining,omitempty"`
+	Removed         bool    `json:"removed,omitempty"`
+}
+
+type CombatEngagement struct {
+	ID                 string  `json:"id"`
+	AttackerUnitID     string  `json:"attackerUnitId"`
+	DefenderUnitID     string  `json:"defenderUnitId"`
+	DefenderFace       string  `json:"defenderFace"`
+	DefenderFortified  bool    `json:"defenderFortified,omitempty"`
+	AxisDX             float64 `json:"axisDx"`
+	AxisDY             float64 `json:"axisDy"`
+	Round              int     `json:"round"`
+	CreatedActionIndex int     `json:"createdActionIndex"`
+	Active             bool    `json:"active"`
+}
+
+type PendingCombatChoice struct {
+	EngagementID      string   `json:"engagementId"`
+	WinningPlayerID   int      `json:"winningPlayerId"`
+	WinningUnitID     string   `json:"winningUnitId"`
+	WinningIsAttacker bool     `json:"winningIsAttacker"`
+	LosingUnitID      string   `json:"losingUnitId"`
+	Choices           []string `json:"choices"`
+	AxisDX            float64  `json:"axisDx"`
+	AxisDY            float64  `json:"axisDy"`
+	SourceActionIndex int      `json:"sourceActionIndex"`
+}
+
+type CombatRoundResult struct {
+	EngagementID  string               `json:"engagementId"`
+	Attacker      CombatSideResult     `json:"attacker"`
+	Defender      CombatSideResult     `json:"defender"`
+	Casualties    []CasualtyResult     `json:"casualties,omitempty"`
+	MoraleTests   []MoraleTestResult   `json:"moraleTests,omitempty"`
+	BrokenUnits   []string             `json:"brokenUnits,omitempty"`
+	WinnerUnitID  string               `json:"winnerUnitId,omitempty"`
+	PendingChoice *PendingCombatChoice `json:"pendingChoice,omitempty"`
+}
+
+type CombatSideResult struct {
+	UnitID       string           `json:"unitId"`
+	PlayerID     int              `json:"playerId"`
+	ContactFace  string           `json:"contactFace"`
+	DiceCount    int              `json:"diceCount"`
+	TargetNumber int              `json:"targetNumber"`
+	Modifiers    []CombatModifier `json:"modifiers"`
+	Rolls        []int            `json:"rolls"`
+	Hits         int              `json:"hits"`
+}
+
+type CombatModifier struct {
+	Label string `json:"label"`
+	Value int    `json:"value"`
+}
+
+type MoveResult struct {
+	Status         string             `json:"status"`
+	DistanceMM     float64            `json:"distanceMm"`
+	DefenderUnitID string             `json:"defenderUnitId,omitempty"`
+	DefenderFace   string             `json:"defenderFace,omitempty"`
+	EngagementID   string             `json:"engagementId,omitempty"`
+	Combat         *CombatRoundResult `json:"combat,omitempty"`
+}
+
+type CasualtyResult struct {
+	UnitID       string `json:"unitId"`
+	MiniKey      string `json:"miniKey"`
+	Damage       int    `json:"damage"`
+	HealthBefore int    `json:"healthBefore"`
+	HealthAfter  int    `json:"healthAfter"`
+	Removed      bool   `json:"removed"`
+	WasOfficer   bool   `json:"wasOfficer"`
+}
+
+type CombatChoiceResult struct {
+	Choice              string   `json:"choice"`
+	MovingUnitID        string   `json:"movingUnitId,omitempty"`
+	RequestedDistanceMM float64  `json:"requestedDistanceMm,omitempty"`
+	MovedDistanceMM     float64  `json:"movedDistanceMm,omitempty"`
+	AxisDX              float64  `json:"axisDx,omitempty"`
+	AxisDY              float64  `json:"axisDy,omitempty"`
+	Start               Position `json:"start,omitempty"`
+	End                 Position `json:"end,omitempty"`
+	StoppedBy           string   `json:"stoppedBy,omitempty"`
+}
+
+type Position struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+type MoraleTestResult struct {
+	UnitID       string           `json:"unitId"`
+	Rolls        []int            `json:"rolls"`
+	TargetNumber int              `json:"targetNumber"`
+	Modifiers    []CombatModifier `json:"modifiers"`
+	Passed       bool             `json:"passed"`
+	Cascade      bool             `json:"cascade"`
+	Outcome      string           `json:"outcome"`
 }
 
 type Activation struct {
@@ -192,13 +314,14 @@ type PlacementRequest struct {
 }
 
 type ActionRequest struct {
-	PlayerID   int     `json:"playerId"`
-	UnitID     string  `json:"unitId"`
-	Type       string  `json:"type"`
-	Direction  string  `json:"direction,omitempty"`
-	DistanceMM float64 `json:"distanceMm,omitempty"`
-	FacingDeg  int     `json:"facingDeg,omitempty"`
-	AnchorKey  string  `json:"anchorKey,omitempty"`
+	PlayerID     int     `json:"playerId"`
+	UnitID       string  `json:"unitId"`
+	Type         string  `json:"type"`
+	Direction    string  `json:"direction,omitempty"`
+	DistanceMM   float64 `json:"distanceMm,omitempty"`
+	FacingDeg    int     `json:"facingDeg,omitempty"`
+	AnchorKey    string  `json:"anchorKey,omitempty"`
+	CombatChoice string  `json:"combatChoice,omitempty"`
 }
 
 type RewindRequest struct {

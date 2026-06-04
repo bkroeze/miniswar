@@ -146,6 +146,7 @@ func (s *Store) GetGame(id string) (*game.Game, error) {
 	if err := json.Unmarshal([]byte(state), &g); err != nil {
 		return nil, err
 	}
+	game.NormalizeGame(&g)
 	snapshots, err := s.Snapshots(id)
 	if err != nil {
 		return nil, err
@@ -177,6 +178,7 @@ order by g.updated_at desc`)
 		if err := json.Unmarshal([]byte(state), &g); err != nil {
 			return nil, err
 		}
+		game.NormalizeGame(&g)
 		out = append(out, game.GameSummary{
 			ID:            id,
 			CreatedAt:     created,
@@ -205,6 +207,11 @@ func (s *Store) SaveSnapshot(gameID string, actionIndex int, state string) error
 	_, err := s.db.Exec(`
 insert or replace into snapshots(game_id, action_index, state_json, created_at)
 values (?, ?, ?, ?)`, gameID, actionIndex, state, time.Now().UTC().Format(time.RFC3339Nano))
+	return err
+}
+
+func (s *Store) DeleteSnapshotsAfter(gameID string, actionIndex int) error {
+	_, err := s.db.Exec(`delete from snapshots where game_id = ? and action_index > ?`, gameID, actionIndex)
 	return err
 }
 

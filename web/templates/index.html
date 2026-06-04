@@ -106,6 +106,15 @@
       </div>
 
       <h2>Actions</h2>
+      <section class="combat-choice" x-show="pendingCombatChoice()" x-cloak>
+        <h3>Combat Choice</h3>
+        <p x-text="pendingCombatChoice() ? `${pendingCombatChoice().winningUnitId} won against ${pendingCombatChoice().losingUnitId}` : ''"></p>
+        <div class="choice-grid">
+          <template x-for="choice in pendingCombatChoice()?.choices || []" :key="choice">
+            <button type="button" @click="resolveCombatChoice(choice)" x-text="combatChoiceLabel(choice)"></button>
+          </template>
+        </div>
+      </section>
       <p class="target-line" x-text="pivotAxisLabel()"></p>
       <div class="action-grid">
         <label>Distance

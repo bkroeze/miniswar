@@ -159,6 +159,24 @@ function createMiniswarApp() {
       this.messages = [...(response.messages || []), ...(response.errors || [])];
     },
 
+    async resolveCombatChoice(combatChoice) {
+      const choice = this.pendingCombatChoice();
+      if (!choice) return;
+      const response = await this.api(`/api/games/${this.game.id}/actions`, {
+        method: "POST",
+        body: JSON.stringify({
+          playerId: choice.winningPlayerId,
+          unitId: choice.winningUnitId,
+          type: "combat_pushback",
+          combatChoice,
+        }),
+      });
+      if (response.ok) {
+        await this.setGame(response.game, { resetPivotAxis: true });
+      }
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
     async rewind(actionIndex) {
       const response = await this.api(`/api/games/${this.game.id}/rewind`, {
         method: "POST",
@@ -193,14 +211,14 @@ function createMiniswarApp() {
 
     selectedActivatableUnit() {
       const selected = this.game?.units?.find((unit) => unit.id === this.selectedUnit);
-      if (selected && selected.playerId === this.game.activePlayer && !this.unitActivatedThisRound(selected.id)) {
+      if (selected && selected.playerId === this.game.activePlayer && !selected.broken && !this.unitActivatedThisRound(selected.id)) {
         return selected;
       }
       return this.activatableUnits()[0];
     },
 
     activatableUnits() {
-      return (this.game?.units || []).filter((unit) => unit.playerId === this.game.activePlayer && !this.unitActivatedThisRound(unit.id));
+      return (this.game?.units || []).filter((unit) => unit.playerId === this.game.activePlayer && !unit.broken && !this.unitActivatedThisRound(unit.id));
     },
 
     unitActivatedThisRound(unitId) {
@@ -212,12 +230,25 @@ function createMiniswarApp() {
       return this.game?.units?.find((unit) => unit.id === id);
     },
 
+    pendingCombatChoice() {
+      return this.game?.pendingCombatChoice || null;
+    },
+
+    combatChoiceLabel(choice) {
+      return {
+        pushback_25: "Push 25mm",
+        pushback_75: "Push 75mm",
+        withdraw_25: "Withdraw 25mm",
+        decline: "Decline",
+      }[choice] || choice;
+    },
+
     canActivate() {
-      return this.game && !this.game.currentActivation && Boolean(this.selectedActivatableUnit());
+      return this.game && !this.pendingCombatChoice() && !this.game.currentActivation && Boolean(this.selectedActivatableUnit());
     },
 
     canAct() {
-      return Boolean(this.game?.currentActivation);
+      return Boolean(this.game?.currentActivation && !this.pendingCombatChoice());
     },
 
     selectedUnitLabel() {
@@ -239,7 +270,7 @@ function createMiniswarApp() {
         await this.renderArenaSoon();
         return;
       }
-      if (unit.playerId === this.game.activePlayer && !this.unitActivatedThisRound(unit.id)) {
+      if (unit.playerId === this.game.activePlayer && !unit.broken && !this.unitActivatedThisRound(unit.id)) {
         this.selectedUnit = unit.id;
         this.selectedMini = "";
       }
@@ -282,6 +313,10 @@ function createMiniswarApp() {
       if (this.isSetupPhase()) {
         const unit = this.currentPlacementUnit();
         return unit ? `Setup: player ${unit.playerId} placing ${unit.name}` : "Setup";
+      }
+      const choice = this.pendingCombatChoice();
+      if (choice) {
+        return `Combat choice: player ${choice.winningPlayerId}, ${choice.winningUnitId}`;
       }
       const activation = this.game.currentActivation;
       if (activation) {
@@ -372,7 +407,14 @@ function createMiniswarApp() {
       if (!root) return;
       root.replaceChildren();
       const ns = "http://www.w3.org/2000/svg";
-      const units = (this.game?.units || []).filter((unit) => unit.placed);
+      const pendingChoice = this.pendingCombatChoice();
+      const engagedUnits = new Set();
+      for (const engagement of this.game?.engagements || []) {
+        if (!engagement.active) continue;
+        engagedUnits.add(engagement.attackerUnitId);
+        engagedUnits.add(engagement.defenderUnitId);
+      }
+      const units = (this.game?.units || []).filter((unit) => unit.placed && !unit.broken);
       if (this.isSetupPhase() && this.placementPreview) {
         const previewUnit = this.currentPlacementUnit();
         if (previewUnit) {
@@ -383,11 +425,20 @@ function createMiniswarApp() {
         const isActiveUnit = this.game?.currentActivation?.unitId === unit.id;
         const isSelectedForActivation = !this.game?.currentActivation && unit.id === this.selectedUnit && unit.playerId === this.game.activePlayer && !this.unitActivatedThisRound(unit.id);
         const pivotAxis = isActiveUnit ? this.pivotAxisKey() : "";
+        const isEngaged = engagedUnits.has(unit.id);
+        const isWinner = pendingChoice?.winningUnitId === unit.id;
+        const isLoser = pendingChoice?.losingUnitId === unit.id;
+        const unitClasses = ["unit"];
+        if (unit.preview) unitClasses.push("placement-preview");
+        if (isEngaged) unitClasses.push("engaged");
+        if (unit.disordered) unitClasses.push("disordered");
+        if (isWinner) unitClasses.push("pending-winner");
+        if (isLoser) unitClasses.push("pending-loser");
         const group = document.createElementNS(ns, "g");
         group.setAttribute("transform", `translate(${unit.x} ${unit.y}) rotate(${unit.facingDeg})`);
         group.setAttribute("data-unit", unit.id);
+        group.setAttribute("class", unitClasses.join(" "));
         if (unit.preview) {
-          group.setAttribute("class", "placement-preview");
           group.setAttribute("pointer-events", "none");
         }
         group.addEventListener("click", () => {
@@ -396,6 +447,7 @@ function createMiniswarApp() {
         });
 
         for (const mini of unit.minis) {
+          if (mini.removed) continue;
           const miniGroup = document.createElementNS(ns, "g");
           miniGroup.setAttribute("transform", `translate(${mini.relX} ${mini.relY})`);
           miniGroup.addEventListener("click", (event) => {
@@ -422,8 +474,45 @@ function createMiniswarApp() {
           miniGroup.appendChild(text);
           group.appendChild(miniGroup);
         }
+        const status = this.unitStatusText(unit, { isEngaged, isWinner, isLoser });
+        if (status) {
+          const bounds = this.localUnitBounds(unit);
+          const badge = document.createElementNS(ns, "text");
+          badge.setAttribute("x", bounds.minX);
+          badge.setAttribute("y", bounds.minY - 6);
+          badge.setAttribute("class", "unit-status-text");
+          badge.textContent = status;
+          group.appendChild(badge);
+        }
         root.appendChild(group);
       }
+    },
+
+    isEngagedUnit(unitId) {
+      return Boolean((this.game?.engagements || []).some((engagement) => engagement.active && (engagement.attackerUnitId === unitId || engagement.defenderUnitId === unitId)));
+    },
+
+    unitStatusText(unit, state = {}) {
+      const parts = [];
+      if (state.isEngaged ?? this.isEngagedUnit(unit.id)) parts.push("engaged");
+      if (unit.disordered) parts.push("disordered");
+      if (state.isWinner ?? this.pendingCombatChoice()?.winningUnitId === unit.id) parts.push("winner");
+      if (state.isLoser ?? this.pendingCombatChoice()?.losingUnitId === unit.id) parts.push("pushed");
+      return parts.join(" / ");
+    },
+
+    localUnitBounds(unit) {
+      const activeMinis = (unit.minis || []).filter((mini) => !mini.removed);
+      if (activeMinis.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+      return activeMinis.reduce(
+        (bounds, mini) => ({
+          minX: Math.min(bounds.minX, mini.relX),
+          minY: Math.min(bounds.minY, mini.relY),
+          maxX: Math.max(bounds.maxX, mini.relX + mini.widthMm),
+          maxY: Math.max(bounds.maxY, mini.relY + mini.depthMm),
+        }),
+        { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
+      );
     },
 
     renderTerrain() {

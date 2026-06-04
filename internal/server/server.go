@@ -252,6 +252,10 @@ func (s *Server) rewind(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	if err := s.store.DeleteSnapshotsAfter(g.ID, req.ActionIndex); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Game: g, LegalActions: game.LegalActions(g), Messages: []string{"Game rewound."}})
 }
 

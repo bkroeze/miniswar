@@ -81,6 +81,96 @@ func TestCreateActivateActionAndRewind(t *testing.T) {
 	}
 }
 
+func TestCombatHTTPFlowPersistsPendingChoiceAndRewinds(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	srv, g := createCombatGameWithFirstPlayer(t, st, 1)
+	placeCombatUnits(t, srv, g)
+	g = getGame(t, srv, g.ID)
+	unit := firstUnitForPlayer(g, 1)
+
+	res := request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/activate", `{"playerId":1,"unitId":"`+unit.ID+`"}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("activate status %d: %s", res.Code, res.Body.String())
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/actions", `{"playerId":1,"unitId":"`+unit.ID+`","type":"move","direction":"forward","distanceMm":40}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("combat move status %d: %s", res.Code, res.Body.String())
+	}
+	var moved game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &moved); err != nil {
+		t.Fatal(err)
+	}
+	if moved.Game.PendingCombatChoice == nil {
+		t.Fatalf("move into combat should create pending choice: %#v", moved.Game)
+	}
+	if len(moved.LegalActions) != 1 || moved.LegalActions[0] != game.ActionCombatPushback {
+		t.Fatalf("legal actions got %v, want only combat pushback", moved.LegalActions)
+	}
+	actionResult := moved.Action.Result.(map[string]any)
+	if _, ok := actionResult["combatRound"].(map[string]any); !ok {
+		t.Fatalf("combat result missing from action JSON: %#v", actionResult)
+	}
+	if rounds, ok := actionResult["combatRounds"].([]any); !ok || len(rounds) != 1 {
+		t.Fatalf("canonical combatRounds missing from action JSON: %#v", actionResult)
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/actions", `{"playerId":1,"unitId":"`+unit.ID+`","type":"combat_pushback","combatChoice":"sideways"}`)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("invalid pushback status %d: %s", res.Code, res.Body.String())
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/actions", `{"playerId":1,"unitId":"u2","type":"combat_pushback","combatChoice":"decline"}`)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("mismatched pushback unit status %d: %s", res.Code, res.Body.String())
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/actions", `{"playerId":1,"unitId":"`+unit.ID+`","type":"combat_pushback","combatChoice":"decline"}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("decline pushback status %d: %s", res.Code, res.Body.String())
+	}
+	var declined game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &declined); err != nil {
+		t.Fatal(err)
+	}
+	if declined.Game.PendingCombatChoice != nil {
+		t.Fatalf("decline should clear pending choice: %#v", declined.Game.PendingCombatChoice)
+	}
+	if len(declined.Game.Engagements) != 1 || declined.Game.Engagements[0].Active {
+		t.Fatalf("decline should deactivate engagement: %#v", declined.Game.Engagements)
+	}
+	reloaded := getGame(t, srv, g.ID)
+	if reloaded.PendingCombatChoice != nil {
+		t.Fatalf("reloaded game should persist cleared pending choice: %#v", reloaded.PendingCombatChoice)
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/rewind", `{"actionIndex":`+itoa(moved.Action.Index)+`}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("rewind status %d: %s", res.Code, res.Body.String())
+	}
+	var rewound game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &rewound); err != nil {
+		t.Fatal(err)
+	}
+	if rewound.Game.PendingCombatChoice != nil || len(rewound.Game.Engagements) != 0 {
+		t.Fatalf("rewind before combat should clear combat state: pending=%#v engagements=%#v", rewound.Game.PendingCombatChoice, rewound.Game.Engagements)
+	}
+	if rewound.Game.RandomRollIndex >= moved.Game.RandomRollIndex {
+		t.Fatalf("rewind should restore earlier random progress: got %d, combat had %d", rewound.Game.RandomRollIndex, moved.Game.RandomRollIndex)
+	}
+	afterRewind := getGame(t, srv, g.ID)
+	for _, snapshot := range afterRewind.Snapshots {
+		if snapshot.Index > moved.Action.Index {
+			t.Fatalf("rewind should prune future snapshots, kept %+v after rewinding to %d", snapshot, moved.Action.Index)
+		}
+	}
+}
+
 func TestListGamesReturnsSummaries(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
 	if err != nil {
@@ -216,6 +306,60 @@ func request(t *testing.T, handler http.Handler, method, path, body string) *htt
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
 	return res
+}
+
+func createCombatGameWithFirstPlayer(t *testing.T, st *store.Store, playerID int) (http.Handler, *game.Game) {
+	t.Helper()
+	body := `{"player1":{"baseWidthMm":25,"baseDepthMm":25,"count":1,"stats":{"a":5,"f":1,"d":-20,"cd":1,"h":20}},"player2":{"baseWidthMm":25,"baseDepthMm":25,"count":1,"stats":{"a":5,"f":1,"d":1,"cd":1,"h":20}}}`
+	for seed := int64(1); seed < 100; seed++ {
+		srv := New(st, game.NewEngine(seed)).Routes()
+		res := request(t, srv, http.MethodPost, "/api/games", body)
+		if res.Code != http.StatusCreated {
+			t.Fatalf("create status %d: %s", res.Code, res.Body.String())
+		}
+		var created game.APIResponse
+		if err := json.Unmarshal(res.Body.Bytes(), &created); err != nil {
+			t.Fatal(err)
+		}
+		if created.Game.ActivePlayer == playerID {
+			return srv, created.Game
+		}
+	}
+	t.Fatalf("could not create game with first player %d", playerID)
+	return nil, nil
+}
+
+func placeCombatUnits(t *testing.T, handler http.Handler, g *game.Game) {
+	t.Helper()
+	for g.Phase == "setup" {
+		unit := firstUnplacedUnitForPlayer(g, g.ActivePlayer)
+		x, y, facing := 112, 112, 0
+		if unit.PlayerID == 2 {
+			x, y, facing = 112, 62, 180
+		}
+		res := request(t, handler, http.MethodPost, "/api/games/"+g.ID+"/placements", `{"playerId":`+itoa(unit.PlayerID)+`,"unitId":"`+unit.ID+`","x":`+itoa(x)+`,"y":`+itoa(y)+`,"facingDeg":`+itoa(facing)+`}`)
+		if res.Code != http.StatusOK {
+			t.Fatalf("placement status %d: %s", res.Code, res.Body.String())
+		}
+		var placed game.APIResponse
+		if err := json.Unmarshal(res.Body.Bytes(), &placed); err != nil {
+			t.Fatal(err)
+		}
+		g = placed.Game
+	}
+}
+
+func getGame(t *testing.T, handler http.Handler, gameID string) *game.Game {
+	t.Helper()
+	res := request(t, handler, http.MethodGet, "/api/games/"+gameID, "")
+	if res.Code != http.StatusOK {
+		t.Fatalf("get game status %d: %s", res.Code, res.Body.String())
+	}
+	var response game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	return response.Game
 }
 
 func itoa(v int) string {

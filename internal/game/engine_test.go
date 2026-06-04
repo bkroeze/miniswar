@@ -101,6 +101,66 @@ func TestActivationAndMove(t *testing.T) {
 	}
 }
 
+func TestActivationRollsReplayFromRestoredRandomProgress(t *testing.T) {
+	engine := NewEngine(17)
+	g, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	placeDefaultUnits(g)
+	unit := firstUnitForPlayer(g, g.ActivePlayer)
+	before, err := Snapshot(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, firstRoll, err := engine.Activate(g, ActivateRequest{PlayerID: g.ActivePlayer, UnitID: unit.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := Restore(before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, replayedRoll, err := engine.Activate(restored, ActivateRequest{PlayerID: restored.ActivePlayer, UnitID: unit.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstRoll[0] != replayedRoll[0] || firstRoll[1] != replayedRoll[1] {
+		t.Fatalf("roll replay mismatch: got %v, want %v", replayedRoll, firstRoll)
+	}
+	if restored.RandomRollIndex != g.RandomRollIndex {
+		t.Fatalf("random cursor mismatch: got %d, want %d", restored.RandomRollIndex, g.RandomRollIndex)
+	}
+}
+
+func TestRestoreNormalizesLegacyCombatDefaults(t *testing.T) {
+	restored, err := Restore(`{
+		"id":"legacy",
+		"round":1,
+		"phase":"awaiting_activation",
+		"units":[{
+			"id":"u1",
+			"playerId":1,
+			"placed":true,
+			"stats":{"h":2},
+			"base":{"widthMm":25,"depthMm":25,"perRank":5},
+			"minis":[{"key":"m1","widthMm":25,"depthMm":25}]
+		}]
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.Engagements == nil {
+		t.Fatal("legacy restore should normalize engagements to an empty slice")
+	}
+	if restored.Units[0].Minis[0].HealthRemaining != 2 {
+		t.Fatalf("legacy mini health got %d, want 2", restored.Units[0].Minis[0].HealthRemaining)
+	}
+}
+
 func TestCompassFacingMovement(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -125,6 +185,340 @@ func TestCompassFacingMovement(t *testing.T) {
 				t.Fatalf("got (%v,%v), want (%v,%v)", unit.X, unit.Y, tc.wantX, tc.wantY)
 			}
 		})
+	}
+}
+
+func TestHitsDamageHighestNumberedNonOfficerBeforeOfficer(t *testing.T) {
+	unit := formationUnit("u1", 1, 100, 100, 0, 5)
+	unit.Stats.H = 2
+	for i := range unit.Minis {
+		unit.Minis[i].HealthRemaining = 2
+	}
+
+	result := applyHitsToUnit(&unit, 9)
+
+	if result.Damage != 9 || result.Removed != 4 {
+		t.Fatalf("hit application got damage %d removed %d", result.Damage, result.Removed)
+	}
+	if len(result.Casualties) == 0 || result.Casualties[0].HealthBefore != 2 || result.Casualties[0].HealthAfter != 1 {
+		t.Fatalf("casualty health feedback missing before/after detail: %+v", result.Casualties)
+	}
+	for _, index := range []int{1, 2, 4, 5} {
+		mini := unit.Minis[index-1]
+		if !mini.Removed || mini.HealthRemaining != 0 {
+			t.Fatalf("mini %d should be removed last-to-first before officer: %+v", index, mini)
+		}
+	}
+	officer := unit.Minis[2]
+	if !officer.IsOfficer || officer.Removed || officer.HealthRemaining != 1 {
+		t.Fatalf("officer should receive only final leftover damage: %+v", officer)
+	}
+}
+
+func TestCombatDiceCountUsesActiveFrontRankOrFullRanks(t *testing.T) {
+	unit := formationUnit("u1", 1, 100, 100, 0, 10)
+	unit.Stats.CD = 2
+
+	if got := combatDiceCount(unit, CombatFaceFront); got != 10 {
+		t.Fatalf("front dice got %d, want 10", got)
+	}
+	if got := combatDiceCount(unit, CombatFaceLeft); got != 4 {
+		t.Fatalf("side dice got %d, want 4", got)
+	}
+
+	unit.Minis[4].Removed = true
+	if got := combatDiceCount(unit, CombatFaceFront); got != 8 {
+		t.Fatalf("front dice after casualty got %d, want 8", got)
+	}
+	if got := combatDiceCount(unit, CombatFaceRight); got != 2 {
+		t.Fatalf("side dice after broken rank got %d, want 2", got)
+	}
+}
+
+func TestCombatTargetNumberRecordsRuleModifiersAndHits(t *testing.T) {
+	g := &Game{
+		Round: 1,
+		ActionHistory: []ActionRecord{
+			{Round: 1, Type: ActionActivate, UnitID: "u1"},
+		},
+	}
+	attacker := formationUnit("u1", 1, 100, 100, 0, 10)
+	attacker.Stats.F = 6
+	attacker.Disordered = true
+	defender := formationUnit("u2", 2, 100, 50, 180, 5)
+	defender.Stats.D = 2
+
+	target, modifiers := combatTargetNumber(g, attacker, defender, CombatFaceFront, CombatFaceRear, "u2", false)
+
+	if target != 5 {
+		t.Fatalf("target got %d, want 5; modifiers=%+v", target, modifiers)
+	}
+	for _, label := range []string{"ranks", "attacking flank or rear", "non-active unit already activated", "defender rear face", "attacker disordered"} {
+		if !hasCombatModifier(modifiers, label) {
+			t.Fatalf("missing modifier %q in %+v", label, modifiers)
+		}
+	}
+	for _, tc := range []struct {
+		roll int
+		want int
+	}{
+		{roll: 4, want: 0},
+		{roll: 5, want: 1},
+		{roll: 10, want: 2},
+		{roll: 15, want: 3},
+	} {
+		if got := hitsForRoll(tc.roll, 5); got != tc.want {
+			t.Fatalf("roll %d got %d hit(s), want %d", tc.roll, got, tc.want)
+		}
+	}
+}
+
+func TestMoveIntoCombatCreatesFlushEngagementAndCombatResult(t *testing.T) {
+	engine := NewEngine(23)
+	g := &Game{
+		Round:         1,
+		Phase:         "activated",
+		ActivePlayer:  1,
+		RandomSeed:    23,
+		Battlemap:     Battlemaps()[0],
+		Engagements:   []CombatEngagement{},
+		ActionHistory: []ActionRecord{},
+	}
+	attacker := formationUnit("u1", 1, 100, 100, 0, 1)
+	attacker.Stats = UnitStats{F: 1, D: -20, CD: 1, H: 1}
+	defender := formationUnit("u2", 2, 100, 50, 0, 1)
+	defender.Stats = UnitStats{F: 1, D: -20, CD: 1, H: 1}
+	g.Units = []Unit{attacker, defender}
+	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 1}
+
+	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionMove, Direction: "forward", DistanceMM: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := rec.Result.(map[string]any)
+	move := result["movement"].(MoveResult)
+	if len(g.Engagements) != 1 || !g.Engagements[0].Active {
+		t.Fatalf("expected active engagement, got %+v", g.Engagements)
+	}
+	if g.Engagements[0].DefenderFace != CombatFaceRear {
+		t.Fatalf("defender face got %q, want rear", g.Engagements[0].DefenderFace)
+	}
+	updated, _ := findUnit(g, "u1")
+	if updated.FacingDeg != 0 || unitsMiniRectsOverlap(*updated, updated.X, updated.Y, defender) {
+		t.Fatalf("attacker should be flush and non-overlapping: %+v", updated)
+	}
+	if move.Status != "entered_combat" || move.Combat == nil {
+		t.Fatalf("move result did not record combat: %+v", move)
+	}
+	if len(move.Combat.Attacker.Rolls) != 1 || len(move.Combat.Defender.Rolls) != 1 {
+		t.Fatalf("combat rolls not recorded: %+v", move.Combat)
+	}
+}
+
+func TestExactEdgeContactEntersCombat(t *testing.T) {
+	engine := NewEngine(24)
+	g := &Game{
+		Round:         1,
+		Phase:         "activated",
+		ActivePlayer:  1,
+		RandomSeed:    24,
+		Battlemap:     Battlemaps()[0],
+		Engagements:   []CombatEngagement{},
+		ActionHistory: []ActionRecord{},
+	}
+	attacker := formationUnit("u1", 1, 100, 100, 0, 1)
+	attacker.Stats = UnitStats{F: 1, D: 1, CD: 1, H: 20}
+	defender := formationUnit("u2", 2, 100, 50, 0, 1)
+	defender.Stats = UnitStats{F: 1, D: 1, CD: 1, H: 20}
+	g.Units = []Unit{attacker, defender}
+	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 1}
+
+	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionMove, Direction: "forward", DistanceMM: 25})
+	if err != nil {
+		t.Fatal(err)
+	}
+	move := rec.Result.(map[string]any)["movement"].(MoveResult)
+	if move.Status != "entered_combat" || len(g.Engagements) != 1 {
+		t.Fatalf("exact edge contact should enter combat: move=%+v engagements=%+v", move, g.Engagements)
+	}
+}
+
+func TestMoveIntoCombatAcrossPassableObstacleAddsFortificationModifier(t *testing.T) {
+	engine := NewEngine(31)
+	g := &Game{
+		Round:        1,
+		Phase:        "activated",
+		ActivePlayer: 1,
+		RandomSeed:   31,
+		Battlemap: Battlemap{Terrains: []TerrainZone{
+			{ID: "fence", Type: TerrainPassableObstacle, Label: "fence", Shape: "rect", X: 95, Y: 70, Width: 35, Height: 8},
+		}},
+		Engagements:   []CombatEngagement{},
+		ActionHistory: []ActionRecord{},
+	}
+	attacker := formationUnit("u1", 1, 100, 100, 0, 1)
+	attacker.Stats = UnitStats{F: 1, D: -20, CD: 1, H: 20}
+	defender := formationUnit("u2", 2, 100, 50, 0, 1)
+	defender.Stats = UnitStats{F: 1, D: 1, CD: 1, H: 20}
+	g.Units = []Unit{attacker, defender}
+	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 1}
+
+	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionMove, Direction: "forward", DistanceMM: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(g.Engagements) != 1 || !g.Engagements[0].DefenderFortified {
+		t.Fatalf("engagement should record defender fortification: %+v", g.Engagements)
+	}
+	result := rec.Result.(map[string]any)
+	move := result["movement"].(MoveResult)
+	if move.Combat == nil || !hasCombatModifier(move.Combat.Attacker.Modifiers, "defender behind fortification") {
+		t.Fatalf("attacker combat result missing fortification modifier: %+v", move.Combat)
+	}
+}
+
+func TestCombatChoicePushbackMovesLoserAndClosesEngagement(t *testing.T) {
+	engine := NewEngine(37)
+	g := combatChoiceGame()
+	loserBeforeY := g.Units[1].Y
+
+	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback25})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if rec.Type != ActionCombatPushback || g.PendingCombatChoice != nil {
+		t.Fatalf("choice should record and clear pending state: rec=%+v pending=%+v", rec, g.PendingCombatChoice)
+	}
+	if g.Engagements[0].Active {
+		t.Fatalf("resolved choice should close engagement: %+v", g.Engagements[0])
+	}
+	if got := mathRound(g.Units[1].Y - loserBeforeY); got != -25 {
+		t.Fatalf("loser moved %.0fmm, want -25mm", got)
+	}
+	choiceResult := rec.Result.(map[string]any)["combatChoice"].(CombatChoiceResult)
+	if choiceResult.MovingUnitID != "u2" || choiceResult.RequestedDistanceMM != 25 || choiceResult.MovedDistanceMM != 25 || choiceResult.StoppedBy != "completed" {
+		t.Fatalf("structured choice result missing movement detail: %+v", choiceResult)
+	}
+}
+
+func TestCombatChoiceWithdrawMovesWinnerAndRejectsWrongUnit(t *testing.T) {
+	engine := NewEngine(38)
+	g := combatChoiceGame()
+
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u2", Type: ActionCombatPushback, CombatChoice: CombatChoiceDecline}); err == nil {
+		t.Fatal("expected wrong unit error")
+	}
+
+	winnerBeforeY := g.Units[0].Y
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoiceWithdraw25}); err != nil {
+		t.Fatal(err)
+	}
+	if got := mathRound(g.Units[0].Y - winnerBeforeY); got != 25 {
+		t.Fatalf("winner withdrew %.0fmm, want 25mm", got)
+	}
+	if g.Engagements[0].Active || g.PendingCombatChoice != nil {
+		t.Fatalf("withdraw should close combat state: engagement=%+v pending=%+v", g.Engagements[0], g.PendingCombatChoice)
+	}
+}
+
+func TestDefenderWonPushbackMovesLosingAttackerAwayFromDefender(t *testing.T) {
+	engine := NewEngine(39)
+	g := combatChoiceGame()
+	g.PendingCombatChoice.WinningPlayerID = 2
+	g.PendingCombatChoice.WinningUnitID = "u2"
+	g.PendingCombatChoice.WinningIsAttacker = false
+	g.PendingCombatChoice.LosingUnitID = "u1"
+	attackerBeforeY := g.Units[0].Y
+
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 2, UnitID: "u2", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback25}); err != nil {
+		t.Fatal(err)
+	}
+	if got := mathRound(g.Units[0].Y - attackerBeforeY); got != 25 {
+		t.Fatalf("losing attacker moved %.0fmm, want 25mm away from defender", got)
+	}
+}
+
+func TestActivatingUnitInExistingEngagementResolvesCombat(t *testing.T) {
+	engine := NewEngine(41)
+	g := combatChoiceGame()
+	g.PendingCombatChoice = nil
+	g.CurrentActivation = nil
+	g.Phase = "awaiting_activation"
+	g.ActivePlayer = 2
+	g.Engagements[0].Active = true
+	g.Units[0].Stats = UnitStats{A: 5, F: 1, D: 1, CD: 1, H: 20}
+	g.Units[1].Stats = UnitStats{A: 5, F: 1, D: -20, CD: 1, H: 20}
+
+	rec, _, err := engine.Activate(g, ActivateRequest{PlayerID: 2, UnitID: "u2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := rec.Result.(map[string]any)
+	rounds, ok := result["combatRounds"].([]CombatRoundResult)
+	if !ok || len(rounds) != 1 {
+		t.Fatalf("activation should include combatRounds: %#v", result)
+	}
+	if g.PendingCombatChoice == nil || g.Phase != "pending_combat_choice" {
+		t.Fatalf("activation combat should create pending choice: phase=%q pending=%+v", g.Phase, g.PendingCombatChoice)
+	}
+}
+
+func TestActiveUnitRemovedByMoveCombatClearsActivation(t *testing.T) {
+	engine := NewEngine(43)
+	g := &Game{
+		Round:        1,
+		Phase:        "activated",
+		ActivePlayer: 1,
+		RandomSeed:   43,
+		Battlemap:    Battlemaps()[0],
+		Engagements:  []CombatEngagement{},
+	}
+	attacker := formationUnit("u1", 1, 100, 100, 0, 1)
+	attacker.Stats = UnitStats{A: 5, F: 1, D: 1, CD: 1, H: 1}
+	defender := formationUnit("u2", 2, 100, 50, 0, 1)
+	defender.Stats = UnitStats{A: 5, F: 1, D: -20, CD: 1, H: 20}
+	g.Units = []Unit{attacker, defender}
+	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 2}
+
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionMove, Direction: "forward", DistanceMM: 25}); err != nil {
+		t.Fatal(err)
+	}
+	unit, _ := findUnit(g, "u1")
+	if !unit.Broken || unit.Placed || g.CurrentActivation != nil || g.Phase != "awaiting_activation" {
+		t.Fatalf("removed active unit should clear activation: unit=%+v activation=%+v phase=%q", unit, g.CurrentActivation, g.Phase)
+	}
+	if _, _, err := engine.Activate(g, ActivateRequest{PlayerID: 1, UnitID: "u1"}); err == nil {
+		t.Fatal("expected removed unit activation error")
+	}
+}
+
+func TestMoraleFailureBreaksDisorderedUnitAndCascades(t *testing.T) {
+	engine := NewEngine(29)
+	g := &Game{RandomSeed: 29, Battlemap: Battlemaps()[0]}
+	broken := oneMiniUnit("u1", 1, 100, 100, 0)
+	broken.Stats.A = 11
+	broken.Disordered = true
+	near := oneMiniUnit("u2", 1, 125, 100, 0)
+	near.Stats.A = 11
+	near.Disordered = true
+	far := oneMiniUnit("u3", 1, 500, 100, 0)
+	far.Stats.A = 11
+	far.Disordered = true
+	g.Units = []Unit{broken, near, far}
+
+	morale := engine.resolveMoraleTest(g, &g.Units[0], false)
+	if morale.Outcome != UnitStatusBroken || !g.Units[0].Broken || g.Units[0].Placed {
+		t.Fatalf("disordered failed morale should break and remove unit: morale=%+v unit=%+v", morale, g.Units[0])
+	}
+	cascade := engine.resolveBrokenCascade(g, "u1")
+	if len(cascade) != 1 || cascade[0].UnitID != "u2" || cascade[0].Outcome != UnitStatusBroken {
+		t.Fatalf("cascade got %+v, want only nearby u2 broken", cascade)
+	}
+	if !g.Units[1].Broken || g.Units[2].Broken {
+		t.Fatalf("cascade affected wrong units: near=%+v far=%+v", g.Units[1], g.Units[2])
 	}
 }
 
@@ -747,6 +1141,43 @@ func formationUnit(id string, playerID int, x, y float64, facing, count int) Uni
 	return unit
 }
 
+func combatChoiceGame() *Game {
+	attacker := formationUnit("u1", 1, 100, 75, 0, 1)
+	attacker.Stats = UnitStats{A: 5, F: 1, D: 1, CD: 1, H: 20}
+	setMiniHealth(&attacker, 20)
+	defender := formationUnit("u2", 2, 100, 50, 0, 1)
+	defender.Stats = UnitStats{A: 5, F: 1, D: 1, CD: 1, H: 20}
+	setMiniHealth(&defender, 20)
+	engagement := CombatEngagement{
+		ID:                 "combat-test",
+		AttackerUnitID:     "u1",
+		DefenderUnitID:     "u2",
+		DefenderFace:       CombatFaceRear,
+		AxisDX:             0,
+		AxisDY:             -1,
+		Round:              1,
+		CreatedActionIndex: 0,
+		Active:             true,
+	}
+	return &Game{
+		Round:               1,
+		Phase:               "pending_combat_choice",
+		ActivePlayer:        1,
+		RandomSeed:          37,
+		Battlemap:           Battlemaps()[0],
+		Units:               []Unit{attacker, defender},
+		Engagements:         []CombatEngagement{engagement},
+		PendingCombatChoice: createPendingCombatChoice(engagement, attacker, defender, 0),
+		CurrentActivation:   &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 0},
+	}
+}
+
+func setMiniHealth(unit *Unit, health int) {
+	for i := range unit.Minis {
+		unit.Minis[i].HealthRemaining = health
+	}
+}
+
 func finishActivation(t *testing.T, engine *Engine, g *Game, unitID string, playerID int) {
 	t.Helper()
 	if _, _, err := engine.Activate(g, ActivateRequest{PlayerID: playerID, UnitID: unitID}); err != nil {
@@ -761,4 +1192,13 @@ func finishActivation(t *testing.T, engine *Engine, g *Game, unitID string, play
 			t.Fatal(err)
 		}
 	}
+}
+
+func hasCombatModifier(modifiers []CombatModifier, label string) bool {
+	for _, modifier := range modifiers {
+		if modifier.Label == label {
+			return true
+		}
+	}
+	return false
 }

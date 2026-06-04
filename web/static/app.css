@@ -284,6 +284,12 @@ label {
   stroke: rgba(37, 35, 32, 0.9);
 }
 
+.terrain.passable_obstacle {
+  fill: rgba(166, 154, 126, 0.42);
+  stroke: rgba(96, 83, 58, 0.8);
+  stroke-dasharray: 6 4;
+}
+
 .terrain-label {
   fill: rgba(34, 33, 29, 0.62);
   font-size: 13px;
@@ -326,6 +332,33 @@ label {
   stroke-width: 5;
 }
 
+.unit.engaged .mini {
+  filter: drop-shadow(0 0 4px rgba(15, 111, 120, 0.55));
+}
+
+.unit.disordered .mini {
+  stroke-dasharray: 6 3;
+}
+
+.unit.pending-winner .mini {
+  fill: rgba(15, 111, 120, 0.2);
+}
+
+.unit.pending-loser .mini {
+  fill: rgba(163, 63, 54, 0.16);
+}
+
+.unit-status-text {
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: #fffdf8;
+  stroke-width: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+  text-transform: uppercase;
+}
+
 .placement-preview {
   opacity: 0.68;
   pointer-events: none;
@@ -353,6 +386,31 @@ label {
   margin: -0.25rem 0 0.75rem;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.combat-choice {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border-left: 3px solid var(--accent);
+  background: rgba(255, 253, 248, 0.66);
+}
+
+.combat-choice p {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.choice-grid button {
+  min-height: 2.35rem;
+  padding: 0.45rem 0.55rem;
 }
 
 .messages,

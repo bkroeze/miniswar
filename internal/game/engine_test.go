@@ -60,6 +60,23 @@ func TestOfficerExistsForSmallUnits(t *testing.T) {
 	}
 }
 
+func TestNewGameSetsMovementLimitFromMovementStat(t *testing.T) {
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, Stats: UnitStats{M: 3}},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, Stats: UnitStats{M: 5}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.Units[0].MovementLimitMM != 75 {
+		t.Fatalf("player 1 movement limit = %d, want M 3 * 25mm", g.Units[0].MovementLimitMM)
+	}
+	if g.Units[1].MovementLimitMM != 125 {
+		t.Fatalf("player 2 movement limit = %d, want M 5 * 25mm", g.Units[1].MovementLimitMM)
+	}
+}
+
 func TestInvalidBaseAndCount(t *testing.T) {
 	engine := NewEngine(1)
 	_, err := engine.NewGame(Setup{
@@ -243,17 +260,17 @@ func TestCombatTargetNumberRecordsRuleModifiersAndHits(t *testing.T) {
 		},
 	}
 	attacker := formationUnit("u1", 1, 100, 100, 0, 10)
-	attacker.Stats.F = 6
+	attacker.Stats.A = 6
 	attacker.Disordered = true
 	defender := formationUnit("u2", 2, 100, 50, 180, 5)
-	defender.Stats.D = 2
+	defender.Stats.D = 11
 
 	target, modifiers := combatTargetNumber(g, attacker, defender, CombatFaceFront, CombatFaceRear, "u2", false)
 
 	if target != 5 {
 		t.Fatalf("target got %d, want 5; modifiers=%+v", target, modifiers)
 	}
-	for _, label := range []string{"ranks", "attacking flank or rear", "non-active unit already activated", "defender rear face", "attacker disordered"} {
+	for _, label := range []string{"ranks", "attacking flank or rear", "defender rear face", "attacker disordered"} {
 		if !hasCombatModifier(modifiers, label) {
 			t.Fatalf("missing modifier %q in %+v", label, modifiers)
 		}
@@ -273,6 +290,63 @@ func TestCombatTargetNumberRecordsRuleModifiersAndHits(t *testing.T) {
 	}
 }
 
+func TestElfGoblinCombatTargetsUseDefenseMinusAttack(t *testing.T) {
+	elf := formationUnit("u1", 1, 100, 100, 270, 5)
+	elf.Stats = UnitStats{A: 3, D: 9, CD: 1, H: 1}
+	goblin := formationUnit("u2", 2, 100, 200, 90, 10)
+	goblin.Stats = UnitStats{A: 6, D: 8, CD: 1, H: 1}
+
+	elfTarget, elfModifiers := combatTargetNumber(&Game{Round: 1}, elf, goblin, CombatFaceFront, CombatFaceFront, "u1", false)
+	if elfTarget != 5 {
+		t.Fatalf("elf target got %d, want 5; modifiers=%+v", elfTarget, elfModifiers)
+	}
+
+	goblinTarget, goblinModifiers := combatTargetNumber(&Game{Round: 1}, goblin, elf, CombatFaceFront, CombatFaceFront, "u1", false)
+	if goblinTarget != 2 {
+		t.Fatalf("goblin target got %d, want 2; modifiers=%+v", goblinTarget, goblinModifiers)
+	}
+
+	elfRolls := []int{4, 1, 3, 5, 8}
+	elfHits := 0
+	for _, roll := range elfRolls {
+		elfHits += hitsForRoll(roll, elfTarget)
+	}
+	if elfHits != 2 {
+		t.Fatalf("elf hits got %d, want 2", elfHits)
+	}
+
+	goblinRolls := []int{4, 1, 1, 5, 6}
+	goblinHits := 0
+	for _, roll := range goblinRolls {
+		goblinHits += hitsForRoll(roll, goblinTarget)
+	}
+	if goblinHits != 3 {
+		t.Fatalf("goblin hits got %d, want 3", goblinHits)
+	}
+}
+
+func TestCombatMessagesIncludeTargetNumbers(t *testing.T) {
+	messages := combatMessages(CombatRoundResult{
+		EngagementID: "combat-test",
+		Attacker: CombatSideResult{
+			UnitID:       "elf",
+			Rolls:        []int{4, 1, 3, 5, 8},
+			TargetNumber: 5,
+			Hits:         2,
+		},
+		Defender: CombatSideResult{
+			UnitID:       "goblin",
+			Rolls:        []int{4, 1, 1, 5, 6},
+			TargetNumber: 2,
+			Hits:         3,
+		},
+	})
+
+	if len(messages) == 0 || messages[0] != "Combat combat-test: elf rolled [4 1 3 5 8] vs TN 5 for 2 hit(s); goblin rolled [4 1 1 5 6] vs TN 2 for 3 hit(s)." {
+		t.Fatalf("combat message missing target numbers: %#v", messages)
+	}
+}
+
 func TestMoveIntoCombatCreatesFlushEngagementAndCombatResult(t *testing.T) {
 	engine := NewEngine(23)
 	g := &Game{
@@ -285,9 +359,11 @@ func TestMoveIntoCombatCreatesFlushEngagementAndCombatResult(t *testing.T) {
 		ActionHistory: []ActionRecord{},
 	}
 	attacker := formationUnit("u1", 1, 100, 100, 0, 1)
-	attacker.Stats = UnitStats{F: 1, D: -20, CD: 1, H: 1}
+	attacker.Stats = UnitStats{A: 20, D: 20, CD: 1, H: 20}
+	setMiniHealth(&attacker, 20)
 	defender := formationUnit("u2", 2, 100, 50, 0, 1)
-	defender.Stats = UnitStats{F: 1, D: -20, CD: 1, H: 1}
+	defender.Stats = UnitStats{A: 1, D: 20, CD: 1, H: 20}
+	setMiniHealth(&defender, 20)
 	g.Units = []Unit{attacker, defender}
 	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 1}
 
@@ -358,9 +434,11 @@ func TestMoveIntoCombatAcrossPassableObstacleAddsFortificationModifier(t *testin
 		ActionHistory: []ActionRecord{},
 	}
 	attacker := formationUnit("u1", 1, 100, 100, 0, 1)
-	attacker.Stats = UnitStats{F: 1, D: -20, CD: 1, H: 20}
+	attacker.Stats = UnitStats{A: 20, D: 20, CD: 1, H: 20}
+	setMiniHealth(&attacker, 20)
 	defender := formationUnit("u2", 2, 100, 50, 0, 1)
-	defender.Stats = UnitStats{F: 1, D: 1, CD: 1, H: 20}
+	defender.Stats = UnitStats{A: 1, D: 20, CD: 1, H: 20}
+	setMiniHealth(&defender, 20)
 	g.Units = []Unit{attacker, defender}
 	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 1}
 
@@ -449,8 +527,8 @@ func TestActivatingUnitInExistingEngagementResolvesCombat(t *testing.T) {
 	g.Phase = "awaiting_activation"
 	g.ActivePlayer = 2
 	g.Engagements[0].Active = true
-	g.Units[0].Stats = UnitStats{A: 5, F: 1, D: 1, CD: 1, H: 20}
-	g.Units[1].Stats = UnitStats{A: 5, F: 1, D: -20, CD: 1, H: 20}
+	g.Units[0].Stats = UnitStats{A: 1, D: 20, CD: 1, H: 20}
+	g.Units[1].Stats = UnitStats{A: 20, D: 20, CD: 1, H: 20}
 
 	rec, _, err := engine.Activate(g, ActivateRequest{PlayerID: 2, UnitID: "u2"})
 	if err != nil {
@@ -477,21 +555,41 @@ func TestActiveUnitRemovedByMoveCombatClearsActivation(t *testing.T) {
 		Engagements:  []CombatEngagement{},
 	}
 	attacker := formationUnit("u1", 1, 100, 100, 0, 1)
-	attacker.Stats = UnitStats{A: 5, F: 1, D: 1, CD: 1, H: 1}
+	attacker.Stats = UnitStats{A: 1, D: 1, CD: 1, H: 1}
 	defender := formationUnit("u2", 2, 100, 50, 0, 1)
-	defender.Stats = UnitStats{A: 5, F: 1, D: -20, CD: 1, H: 20}
+	defender.Stats = UnitStats{A: 20, D: 20, CD: 1, H: 20}
 	g.Units = []Unit{attacker, defender}
 	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 2}
 
-	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionMove, Direction: "forward", DistanceMM: 25}); err != nil {
+	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionMove, Direction: "forward", DistanceMM: 25})
+	if err != nil {
 		t.Fatal(err)
 	}
 	unit, _ := findUnit(g, "u1")
-	if !unit.Broken || unit.Placed || g.CurrentActivation != nil || g.Phase != "awaiting_activation" {
+	if !unit.Broken || unit.Placed || g.CurrentActivation != nil || g.Phase != "complete" || g.WinnerPlayerID != 2 {
 		t.Fatalf("removed active unit should clear activation: unit=%+v activation=%+v phase=%q", unit, g.CurrentActivation, g.Phase)
+	}
+	result := rec.Result.(map[string]any)
+	combat := result["combatRound"].(*CombatRoundResult)
+	for _, morale := range combat.MoraleTests {
+		if morale.UnitID == "u1" {
+			t.Fatalf("destroyed unit should not take morale: %+v", combat.MoraleTests)
+		}
+	}
+	winnerMessage := false
+	for _, message := range rec.Messages {
+		if message == "Player 2 wins." {
+			winnerMessage = true
+		}
+	}
+	if !winnerMessage {
+		t.Fatalf("missing winner message: %+v", rec.Messages)
 	}
 	if _, _, err := engine.Activate(g, ActivateRequest{PlayerID: 1, UnitID: "u1"}); err == nil {
 		t.Fatal("expected removed unit activation error")
+	}
+	if actions := LegalActions(g); len(actions) != 0 {
+		t.Fatalf("complete game should have no legal actions, got %v", actions)
 	}
 }
 
@@ -504,21 +602,62 @@ func TestMoraleFailureBreaksDisorderedUnitAndCascades(t *testing.T) {
 	near := oneMiniUnit("u2", 1, 125, 100, 0)
 	near.Stats.A = 11
 	near.Disordered = true
-	far := oneMiniUnit("u3", 1, 500, 100, 0)
+	nearEnemy := oneMiniUnit("u3", 2, 125, 125, 0)
+	nearEnemy.Stats.A = 11
+	nearEnemy.Disordered = true
+	far := oneMiniUnit("u4", 1, 500, 100, 0)
 	far.Stats.A = 11
 	far.Disordered = true
-	g.Units = []Unit{broken, near, far}
+	g.Units = []Unit{broken, near, nearEnemy, far}
 
 	morale := engine.resolveMoraleTest(g, &g.Units[0], false)
 	if morale.Outcome != UnitStatusBroken || !g.Units[0].Broken || g.Units[0].Placed {
 		t.Fatalf("disordered failed morale should break and remove unit: morale=%+v unit=%+v", morale, g.Units[0])
 	}
-	cascade := engine.resolveBrokenCascade(g, "u1")
+	cascade := engine.resolveBrokenCascade(g, "u1", map[string]bool{})
 	if len(cascade) != 1 || cascade[0].UnitID != "u2" || cascade[0].Outcome != UnitStatusBroken {
 		t.Fatalf("cascade got %+v, want only nearby u2 broken", cascade)
 	}
-	if !g.Units[1].Broken || g.Units[2].Broken {
-		t.Fatalf("cascade affected wrong units: near=%+v far=%+v", g.Units[1], g.Units[2])
+	if !g.Units[1].Broken || g.Units[2].Broken || g.Units[3].Broken {
+		t.Fatalf("cascade affected wrong units: near=%+v enemy=%+v far=%+v", g.Units[1], g.Units[2], g.Units[3])
+	}
+}
+
+func TestMoraleCascadeSkipsUnitsAlreadyTestedThisRound(t *testing.T) {
+	engine := NewEngine(29)
+	g := &Game{
+		Round:      1,
+		RandomSeed: 29,
+		Battlemap:  Battlemaps()[0],
+		ActionHistory: []ActionRecord{
+			{
+				Round: 1,
+				Result: map[string]any{
+					"combatRounds": []CombatRoundResult{
+						{MoraleTests: []MoraleTestResult{{UnitID: "u2", Passed: true}}},
+					},
+				},
+			},
+		},
+	}
+	broken := oneMiniUnit("u1", 1, 100, 100, 0)
+	broken.Broken = true
+	broken.Placed = false
+	alreadyTested := oneMiniUnit("u2", 1, 125, 100, 0)
+	alreadyTested.Stats.A = 11
+	alreadyTested.Disordered = true
+	notYetTested := oneMiniUnit("u3", 1, 150, 100, 0)
+	notYetTested.Stats.A = 11
+	notYetTested.Disordered = true
+	g.Units = []Unit{broken, alreadyTested, notYetTested}
+
+	cascade := engine.resolveBrokenCascade(g, "u1", moraleTestedThisRound(g))
+
+	if len(cascade) != 1 || cascade[0].UnitID != "u3" {
+		t.Fatalf("cascade got %+v, want only not-yet-tested u3", cascade)
+	}
+	if g.Units[1].Broken || !g.Units[2].Broken {
+		t.Fatalf("wrong cascade state: already=%+v notYet=%+v", g.Units[1], g.Units[2])
 	}
 }
 

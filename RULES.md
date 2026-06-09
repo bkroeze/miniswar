@@ -74,12 +74,11 @@ The final CD is always adjusted to be at least 1, regardless of the prior calcul
 
 The target number is the number that needs to be met or exceeded on a D10 roll.
 
-Calculation is: Attacking Unit's Fight stat (F) - Defending unit's Defense stat (D) + modifiers.
+Calculation is: Defending unit's Defense stat (D) - Attacking Unit's Attack stat (A) + modifiers.
 
 Modifiers are:
 - ranks, only if fighting an enemy in the front facing: -(1 * number-of-full-ranks-in-unit -1)
 - attacking left, right or rear: -1
-- non-active unit already activated this round: +1
 - unit is defending its rear face: +1
 - unit is Disordered (a morale effect): +1
 - unit is fighting from a lower elevation: +1 <-- this is a no-op for now, since we don't have elevations, but put in a hook for it with a comment
@@ -131,7 +130,13 @@ If it fails, it becomes "Disordered".
 
 If a Disordered unit fails its test, it becomes "Broken" and is removed from the battlefield, counting as a kill for the enemy.
 
-A unit becoming "Broken" causes a morale test with no modifiers to all units within 8" of the unit.  This can cause a cascade.
+A unit that is completely destroyed is removed and does not take a morale test.
+
+A unit never takes more than one morale test in a turn. If multiple morale triggers would apply, roll only the first test and ignore later morale tests for that unit until the next turn.
+
+A unit becoming "Broken" causes a morale test with no modifiers to friendly units within 8" of the unit.  This can cause a cascade among units owned by the same player.
+
+When only one player has units left on the battlefield, that player wins.
 
 ### Disordered Units
 

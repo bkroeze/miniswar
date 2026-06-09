@@ -167,13 +167,20 @@ func newUnit(player int, id, name string, setup UnitSetup, activation, x, y, fac
 		Stats:            setup.Stats,
 		Base:             base,
 		ActivationNumber: activation,
-		MovementLimitMM:  MovementLimitMM,
+		MovementLimitMM:  movementLimitMM(setup.Stats),
 		X:                float64(x),
 		Y:                float64(y),
 		FacingDeg:        normalizeDeg(facing),
 	}
 	unit.Minis = layoutMinis(unit, setup.Count)
 	return unit, nil
+}
+
+func movementLimitMM(stats UnitStats) int {
+	if stats.M > 0 {
+		return stats.M * 25
+	}
+	return MovementLimitMM
 }
 
 func layoutMinis(unit Unit, count int) []Mini {
@@ -264,6 +271,9 @@ func (e *Engine) Activate(g *Game, req ActivateRequest) (*ActionRecord, []int, e
 	if g.PendingCombatChoice != nil {
 		return nil, nil, errors.New("resolve the pending combat choice before activating")
 	}
+	if g.Phase == "complete" {
+		return nil, nil, errors.New("game is complete")
+	}
 	if g.Phase == "setup" {
 		return nil, nil, errors.New("finish unit placement before activating")
 	}
@@ -334,11 +344,17 @@ func (e *Engine) Activate(g *Game, req ActivateRequest) (*ActionRecord, []int, e
 		}
 	}
 	settleCurrentActivationAfterCombat(g, req.UnitID)
+	if message := completeGameIfWon(g); message != "" {
+		messages = append(messages, message)
+	}
 	rec := g.appendRecord(ActionActivate, req.PlayerID, req.UnitID, req, result, messages)
 	return &rec, roll, nil
 }
 
 func (e *Engine) ApplyAction(g *Game, req ActionRequest) (*ActionRecord, error) {
+	if g.Phase == "complete" {
+		return nil, errors.New("game is complete")
+	}
 	if req.Type == ActionCombatPushback {
 		return e.applyCombatChoice(g, req)
 	}
@@ -386,6 +402,9 @@ func (e *Engine) ApplyAction(g *Game, req ActionRequest) (*ActionRecord, error) 
 				g.Phase = "pending_combat_choice"
 			}
 			settleCurrentActivationAfterCombat(g, req.UnitID)
+			if message := completeGameIfWon(g); message != "" {
+				messages = append(messages, message)
+			}
 		} else if moveResult.Status == "blocked_combat_alignment" {
 			messages = append(messages, fmt.Sprintf("Moved %s %.0fmm; combat alignment was blocked.", req.Direction, moveResult.DistanceMM))
 		} else {
@@ -480,6 +499,9 @@ func (e *Engine) applyCombatChoice(g *Game, req ActionRequest) (*ActionRecord, e
 		}
 	} else {
 		g.Phase = "awaiting_activation"
+	}
+	if message := completeGameIfWon(g); message != "" {
+		messages = append(messages, message)
 	}
 	rec := g.appendRecord(ActionCombatPushback, req.PlayerID, choice.WinningUnitID, req, result, messages)
 	return &rec, nil
@@ -929,18 +951,25 @@ func (e *Engine) resolveCombatRound(g *Game, engagement CombatEngagement, action
 	removeUnitIfNoActiveMinis(defender)
 	removeUnitIfNoActiveMinis(attacker)
 
+	moraleTested := moraleTestedThisRound(g)
 	if moraleRequired(*defender, defenderHits) {
-		morale := e.resolveMoraleTest(g, defender, false)
-		result.MoraleTests = append(result.MoraleTests, morale)
+		if activeMiniCount(*defender) > 0 {
+			if morale, ok := e.resolveMoraleOnce(g, defender, false, moraleTested); ok {
+				result.MoraleTests = append(result.MoraleTests, morale)
+			}
+		}
 		if defender.Broken {
-			result.MoraleTests = append(result.MoraleTests, e.resolveBrokenCascade(g, defender.ID)...)
+			result.MoraleTests = append(result.MoraleTests, e.resolveBrokenCascade(g, defender.ID, moraleTested)...)
 		}
 	}
 	if moraleRequired(*attacker, attackerHits) {
-		morale := e.resolveMoraleTest(g, attacker, false)
-		result.MoraleTests = append(result.MoraleTests, morale)
+		if activeMiniCount(*attacker) > 0 {
+			if morale, ok := e.resolveMoraleOnce(g, attacker, false, moraleTested); ok {
+				result.MoraleTests = append(result.MoraleTests, morale)
+			}
+		}
 		if attacker.Broken {
-			result.MoraleTests = append(result.MoraleTests, e.resolveBrokenCascade(g, attacker.ID)...)
+			result.MoraleTests = append(result.MoraleTests, e.resolveBrokenCascade(g, attacker.ID, moraleTested)...)
 		}
 	}
 	result.BrokenUnits = append(result.BrokenUnits, brokenUnitsFromMorale(result.MoraleTests)...)
@@ -1002,7 +1031,7 @@ func combatDiceCount(unit Unit, ownContactFace string) int {
 }
 
 func combatTargetNumber(g *Game, attacker, defender Unit, ownContactFace, defenderFace, activeUnitID string, defenderFortified bool) (int, []CombatModifier) {
-	target := attacker.Stats.F - defender.Stats.D
+	target := defender.Stats.D - attacker.Stats.A
 	var modifiers []CombatModifier
 	add := func(label string, value int) {
 		if value == 0 {
@@ -1016,9 +1045,6 @@ func combatTargetNumber(g *Game, attacker, defender Unit, ownContactFace, defend
 	}
 	if defenderFace != CombatFaceFront {
 		add("attacking flank or rear", -1)
-	}
-	if attacker.ID != activeUnitID && unitActivatedThisRound(g, attacker.ID) {
-		add("non-active unit already activated", 1)
 	}
 	if defenderFace == CombatFaceRear {
 		add("defender rear face", 1)
@@ -1165,6 +1191,15 @@ func (e *Engine) resolveMoraleTest(g *Game, unit *Unit, cascade bool) MoraleTest
 	}
 }
 
+func (e *Engine) resolveMoraleOnce(g *Game, unit *Unit, cascade bool, tested map[string]bool) (MoraleTestResult, bool) {
+	if tested[unit.ID] {
+		return MoraleTestResult{}, false
+	}
+	morale := e.resolveMoraleTest(g, unit, cascade)
+	tested[unit.ID] = true
+	return morale, true
+}
+
 func moraleTargetNumber(unit Unit, cascade, shooting bool) (int, []CombatModifier) {
 	target := unit.Stats.A
 	var modifiers []CombatModifier
@@ -1198,7 +1233,7 @@ func moraleTargetNumber(unit Unit, cascade, shooting bool) (int, []CombatModifie
 	return target, modifiers
 }
 
-func (e *Engine) resolveBrokenCascade(g *Game, brokenUnitID string) []MoraleTestResult {
+func (e *Engine) resolveBrokenCascade(g *Game, brokenUnitID string, tested map[string]bool) []MoraleTestResult {
 	var results []MoraleTestResult
 	queued := map[string]bool{brokenUnitID: true}
 	queue := []string{brokenUnitID}
@@ -1212,7 +1247,7 @@ func (e *Engine) resolveBrokenCascade(g *Game, brokenUnitID string) []MoraleTest
 		sx, sy := unitCenter(*source)
 		for i := range g.Units {
 			unit := &g.Units[i]
-			if queued[unit.ID] || unit.Broken || !unit.Placed {
+			if queued[unit.ID] || unit.Broken || !unit.Placed || unit.PlayerID != source.PlayerID {
 				continue
 			}
 			ux, uy := unitCenter(*unit)
@@ -1220,7 +1255,10 @@ func (e *Engine) resolveBrokenCascade(g *Game, brokenUnitID string) []MoraleTest
 				continue
 			}
 			queued[unit.ID] = true
-			morale := e.resolveMoraleTest(g, unit, true)
+			morale, ok := e.resolveMoraleOnce(g, unit, true, tested)
+			if !ok {
+				continue
+			}
 			results = append(results, morale)
 			if unit.Broken {
 				queue = append(queue, unit.ID)
@@ -1228,6 +1266,71 @@ func (e *Engine) resolveBrokenCascade(g *Game, brokenUnitID string) []MoraleTest
 		}
 	}
 	return results
+}
+
+func moraleTestedThisRound(g *Game) map[string]bool {
+	tested := map[string]bool{}
+	for _, rec := range g.ActionHistory {
+		if rec.Round == g.Round {
+			markMoraleTestsInResult(tested, rec.Result)
+		}
+	}
+	return tested
+}
+
+func markMoraleTestsInResult(tested map[string]bool, result any) {
+	value, ok := result.(map[string]any)
+	if !ok {
+		return
+	}
+	markMoraleTestsInCombat(tested, value["combatRound"])
+	markMoraleTestsInCombat(tested, value["movement"])
+	if rounds, ok := value["combatRounds"].([]CombatRoundResult); ok {
+		for _, round := range rounds {
+			markMoraleTestsInCombat(tested, round)
+		}
+		return
+	}
+	if rounds, ok := value["combatRounds"].([]any); ok {
+		for _, round := range rounds {
+			markMoraleTestsInCombat(tested, round)
+		}
+	}
+}
+
+func markMoraleTestsInCombat(tested map[string]bool, combat any) {
+	switch value := combat.(type) {
+	case CombatRoundResult:
+		for _, morale := range value.MoraleTests {
+			tested[morale.UnitID] = true
+		}
+	case *CombatRoundResult:
+		if value != nil {
+			markMoraleTestsInCombat(tested, *value)
+		}
+	case MoveResult:
+		if value.Combat != nil {
+			markMoraleTestsInCombat(tested, value.Combat)
+		}
+	case map[string]any:
+		if nested, ok := value["combat"]; ok {
+			markMoraleTestsInCombat(tested, nested)
+		}
+		tests, ok := value["moraleTests"].([]any)
+		if !ok {
+			return
+		}
+		for _, test := range tests {
+			morale, ok := test.(map[string]any)
+			if !ok {
+				continue
+			}
+			unitID, ok := morale["unitId"].(string)
+			if ok && unitID != "" {
+				tested[unitID] = true
+			}
+		}
+	}
 }
 
 func brokenUnitsFromMorale(results []MoraleTestResult) []string {
@@ -1284,10 +1387,10 @@ func deactivateEngagementsForUnit(g *Game, unitID string) {
 
 func combatMessages(result CombatRoundResult) []string {
 	messages := []string{
-		fmt.Sprintf("Combat %s: %s rolled %v for %d hit(s); %s rolled %v for %d hit(s).",
+		fmt.Sprintf("Combat %s: %s rolled %v vs TN %d for %d hit(s); %s rolled %v vs TN %d for %d hit(s).",
 			result.EngagementID,
-			result.Attacker.UnitID, result.Attacker.Rolls, result.Attacker.Hits,
-			result.Defender.UnitID, result.Defender.Rolls, result.Defender.Hits),
+			result.Attacker.UnitID, result.Attacker.Rolls, result.Attacker.TargetNumber, result.Attacker.Hits,
+			result.Defender.UnitID, result.Defender.Rolls, result.Defender.TargetNumber, result.Defender.Hits),
 	}
 	for _, casualty := range result.Casualties {
 		if casualty.Removed {
@@ -1409,6 +1512,9 @@ func NormalizeGame(g *Game) {
 }
 
 func LegalActions(g *Game) []string {
+	if g.Phase == "complete" {
+		return nil
+	}
 	if g.PendingCombatChoice != nil {
 		return []string{ActionCombatPushback}
 	}
@@ -1818,6 +1924,9 @@ func unitActivatedThisRound(g *Game, unitID string) bool {
 }
 
 func advanceTurn(g *Game) {
+	if g.Phase == "complete" {
+		return
+	}
 	if allUnitsActivated(g) {
 		g.Round++
 		g.ActivePlayer = g.FirstPlayer
@@ -1866,6 +1975,38 @@ func allUnitsActivated(g *Game) bool {
 		}
 	}
 	return true
+}
+
+func completeGameIfWon(g *Game) string {
+	if g.Phase == "setup" || g.WinnerPlayerID != 0 {
+		return ""
+	}
+	players := activePlayersRemaining(g)
+	if len(players) != 1 {
+		return ""
+	}
+	for playerID := range players {
+		g.WinnerPlayerID = playerID
+		g.Phase = "complete"
+		g.CurrentActivation = nil
+		g.PendingCombatChoice = nil
+		for i := range g.Engagements {
+			g.Engagements[i].Active = false
+		}
+		return fmt.Sprintf("Player %d wins.", playerID)
+	}
+	return ""
+}
+
+func activePlayersRemaining(g *Game) map[int]bool {
+	players := map[int]bool{}
+	for _, unit := range g.Units {
+		if unit.Broken || !unit.Placed || activeMiniCount(unit) == 0 {
+			continue
+		}
+		players[unit.PlayerID] = true
+	}
+	return players
 }
 
 func rollD10(g *Game) int {

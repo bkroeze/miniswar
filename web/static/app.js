@@ -6,6 +6,7 @@ function createMiniswarApp() {
     messages: [],
     placementPreview: null,
     setupSidebarCollapsed: false,
+    newGameConfigOpen: false,
     loadGamesOpen: false,
     savedGames: [],
     savedGamesLoading: false,
@@ -17,7 +18,7 @@ function createMiniswarApp() {
       player1: { base: "25x25", count: 12, units: [{ base: "25x25", count: 12 }] },
       player2: { base: "25x25", count: 10, units: [{ base: "25x25", count: 10 }] },
     },
-    move: { direction: "forward", distanceMm: 50 },
+    move: { direction: "forward", distanceMm: 100 },
     pivot: { facingDeg: 0 },
 
     isSetupPhase() {
@@ -26,6 +27,20 @@ function createMiniswarApp() {
 
     toggleSetupSidebar() {
       this.setupSidebarCollapsed = !this.setupSidebarCollapsed;
+    },
+
+    async initGame() {
+      await this.loadArmies();
+      this.openNewGameConfig();
+    },
+
+    async openNewGameConfig() {
+      await this.loadArmies();
+      this.newGameConfigOpen = true;
+    },
+
+    closeNewGameConfig() {
+      if (this.game) this.newGameConfigOpen = false;
     },
 
     setupPayload() {
@@ -59,6 +74,7 @@ function createMiniswarApp() {
         body: JSON.stringify(this.setupPayload()),
       });
       if (response.ok) {
+        this.newGameConfigOpen = false;
         await this.setGame(response.game, { resetSelection: true });
       }
       this.messages = [...(response.messages || []), ...(response.errors || [])];
@@ -230,6 +246,77 @@ function createMiniswarApp() {
       return this.game?.units?.find((unit) => unit.id === id);
     },
 
+    selectedUnitObject() {
+      if (!this.selectedUnit) return null;
+      return this.game?.units?.find((unit) => unit.id === this.selectedUnit) || null;
+    },
+
+    detailUnit() {
+      return this.currentActivationUnit() || this.selectedUnitObject();
+    },
+
+    detailInstructions() {
+      if (!this.game) return "Start a new game to configure the battle.";
+      if (this.isSetupPhase()) return "Place units:";
+      return "Select a unit to inspect its stats.";
+    },
+
+    placementCounts() {
+      return [1, 2].map((playerId) => {
+        const units = (this.game?.units || []).filter((unit) => unit.playerId === playerId);
+        return {
+          playerId,
+          total: units.length,
+          remaining: units.filter((unit) => !unit.placed).length,
+        };
+      });
+    },
+
+    unitStatsEntries(unit) {
+      const stats = unit?.stats || {};
+      return [
+        ["A", stats.a || unit?.activationNumber || "-"],
+        ["M", stats.m || Math.round(this.movementLimitForUnit(unit) / 25) || "-"],
+        ["F", stats.f || "-"],
+        ["S", stats.s || "-"],
+        ["D", stats.d || "-"],
+        ["CD", stats.cd || "-"],
+        ["H", stats.h || unit?.maxHealth || "-"],
+      ].map(([label, value]) => ({ label, value }));
+    },
+
+    unitHealthLabel(unit) {
+      if (!unit) return "-";
+      if (unit.currentHealth || unit.maxHealth) return `${unit.currentHealth || 0}/${unit.maxHealth || unit.currentHealth || 0}`;
+      const active = (unit.minis || []).filter((mini) => !mini.removed).length;
+      return `${active}/${(unit.minis || []).length} minis`;
+    },
+
+    unitDetailStatus(unit) {
+      if (!unit) return "-";
+      const parts = [];
+      if (unit.broken) parts.push("broken");
+      if (unit.disordered) parts.push("disordered");
+      if (this.isEngagedUnit(unit.id)) parts.push("engaged");
+      if (this.game?.currentActivation?.unitId === unit.id) parts.push("active");
+      if (!unit.placed) parts.push("unplaced");
+      return parts.join(", ") || "ready";
+    },
+
+    unitDetailMeta(unit) {
+      if (!unit) return "";
+      const base = unit.base ? `${unit.base.widthMm}x${unit.base.depthMm}mm` : "unknown base";
+      return `${unit.id} · ${base} · activation ${unit.activationNumber}`;
+    },
+
+    movementLimitForUnit(unit) {
+      return unit?.movementLimitMm || ((unit?.stats?.m || 0) * 25) || 100;
+    },
+
+    resetMoveDistanceForUnit(unit) {
+      this.move.distanceMm = this.movementLimitForUnit(unit);
+    },
+
     pendingCombatChoice() {
       return this.game?.pendingCombatChoice || null;
     },
@@ -263,6 +350,14 @@ function createMiniswarApp() {
 
     async selectUnit(unit) {
       if (!this.game) return;
+      if (this.isSetupPhase()) {
+        if (unit.placed) {
+          this.selectedUnit = unit.id;
+          this.selectedMini = "";
+        }
+        await this.renderArenaSoon();
+        return;
+      }
       if (this.game.currentActivation) {
         if (this.game.currentActivation.unitId === unit.id) {
           this.selectedUnit = unit.id;
@@ -310,6 +405,7 @@ function createMiniswarApp() {
 
     statusLine() {
       if (!this.game) return "Loading";
+      if (this.game.phase === "complete") return `Game complete: player ${this.game.winnerPlayerId} wins`;
       if (this.isSetupPhase()) {
         const unit = this.currentPlacementUnit();
         return unit ? `Setup: player ${unit.playerId} placing ${unit.name}` : "Setup";
@@ -326,10 +422,15 @@ function createMiniswarApp() {
     },
 
     async setGame(game, options = {}) {
+      const previousActivationUnitId = this.game?.currentActivation?.unitId || "";
       this.game = game;
+      const activationUnit = this.currentActivationUnit();
+      if (activationUnit && activationUnit.id !== previousActivationUnitId) {
+        this.resetMoveDistanceForUnit(activationUnit);
+      }
       this.renderArena();
       if (this.isSetupPhase()) {
-        this.selectedUnit = this.currentPlacementUnit()?.id || "";
+        if (options.resetSelection) this.selectedUnit = "";
         this.selectedMini = "";
         await this.renderArenaSoon();
         return;
@@ -423,7 +524,8 @@ function createMiniswarApp() {
       }
       for (const unit of units) {
         const isActiveUnit = this.game?.currentActivation?.unitId === unit.id;
-        const isSelectedForActivation = !this.game?.currentActivation && unit.id === this.selectedUnit && unit.playerId === this.game.activePlayer && !this.unitActivatedThisRound(unit.id);
+        const isSelectedUnit = unit.id === this.selectedUnit;
+        const isSelectedForActivation = !this.game?.currentActivation && isSelectedUnit && unit.playerId === this.game.activePlayer && !this.unitActivatedThisRound(unit.id);
         const pivotAxis = isActiveUnit ? this.pivotAxisKey() : "";
         const isEngaged = engagedUnits.has(unit.id);
         const isWinner = pendingChoice?.winningUnitId === unit.id;
@@ -461,7 +563,7 @@ function createMiniswarApp() {
           rect.setAttribute("height", mini.depthMm);
           rect.setAttribute(
             "class",
-            `mini p${unit.playerId}${isActiveUnit || isSelectedForActivation ? " active" : ""}${isSelectedForActivation ? " selected-unit" : ""}${isActiveUnit && mini.key === pivotAxis ? " pivot-axis" : ""}`,
+            `mini p${unit.playerId}${isActiveUnit || isSelectedForActivation ? " active" : ""}${isSelectedUnit ? " selected-unit" : ""}${isActiveUnit && mini.key === pivotAxis ? " pivot-axis" : ""}`,
           );
           miniGroup.appendChild(rect);
 

@@ -8,7 +8,7 @@
   <script defer src="/static/app.js"></script>
   <script defer src="/static/alpine.min.js"></script>
 </head>
-<body x-data="miniswar" x-init="createGame()">
+<body x-data="miniswar" x-init="initGame()">
   <header class="topbar">
     <div>
       <h1>Miniswar</h1>
@@ -17,7 +17,7 @@
     <div class="topbar-actions">
       <a class="button-link" href="/armies">Armies</a>
       <button type="button" @click="openLoadGames()">Load Game</button>
-      <button type="button" @click="createGame()">New Game</button>
+      <button type="button" @click="openNewGameConfig()">New Game</button>
     </div>
   </header>
 
@@ -27,55 +27,53 @@
         <span x-text="setupSidebarCollapsed ? '›' : '‹'"></span>
       </button>
       <div id="setup-sidebar-body" class="setup-body" x-show="!setupSidebarCollapsed">
-      <details class="setup-disclosure">
-        <summary>New Game Configuration</summary>
-        <label>Battlemap
-          <select x-model="setup.battlemapId">
-            <option value="old_road">Old Road</option>
-            <option value="forest_wall">Forest Wall</option>
-          </select>
-        </label>
-        <div class="setup-grid">
-          <div class="setup-player">
-            <h3>Player 1</h3>
-            <label>Army
-              <select x-model="setup.player1ArmyId">
-                <option value="">Manual fallback</option>
-                <template x-for="army in armies" :key="`p1-${army.id}`">
-                  <option :value="army.id" x-text="`${army.name} (${army.totalPoints}/${army.targetPoints || 0} pts)`"></option>
+        <section class="details-panel">
+          <h2>Details</h2>
+          <template x-if="!detailUnit()">
+            <div class="detail-empty">
+              <p x-text="detailInstructions()"></p>
+              <ol class="placement-counts" x-show="isSetupPhase()">
+                <template x-for="count in placementCounts()" :key="count.playerId">
+                  <li>
+                    <span x-text="`${count.remaining}/${count.total}`"></span>
+                    <span x-text="`Army ${count.playerId}`"></span>
+                  </li>
                 </template>
-              </select>
-            </label>
-            <ol class="setup-units" x-show="!setup.player1ArmyId">
-              <template x-for="(unit, index) in setup.player1.units" :key="`p1-${index}`">
-                <li>
-                  <span x-text="`${unit.count} minis on ${unit.base}`"></span>
-                  <button type="button" @click="removeSetupUnit(1, index)" :disabled="setup.player1.units.length === 1">remove</button>
-                </li>
-              </template>
-            </ol>
-          </div>
-          <div class="setup-player">
-            <h3>Player 2</h3>
-            <label>Army
-              <select x-model="setup.player2ArmyId">
-                <option value="">Manual fallback</option>
-                <template x-for="army in armies" :key="`p2-${army.id}`">
-                  <option :value="army.id" x-text="`${army.name} (${army.totalPoints}/${army.targetPoints || 0} pts)`"></option>
+              </ol>
+            </div>
+          </template>
+          <template x-if="detailUnit()">
+            <article class="unit-detail">
+              <div class="unit-detail-head">
+                <h3 x-text="detailUnit().name"></h3>
+                <span x-text="`Player ${detailUnit().playerId}`"></span>
+              </div>
+              <p class="unit-detail-meta" x-text="unitDetailMeta(detailUnit())"></p>
+              <dl class="stats-row compact">
+                <template x-for="stat in unitStatsEntries(detailUnit())" :key="stat.label">
+                  <div>
+                    <dt x-text="stat.label"></dt>
+                    <dd x-text="stat.value"></dd>
+                  </div>
                 </template>
-              </select>
-            </label>
-            <ol class="setup-units" x-show="!setup.player2ArmyId">
-              <template x-for="(unit, index) in setup.player2.units" :key="`p2-${index}`">
-                <li>
-                  <span x-text="`${unit.count} minis on ${unit.base}`"></span>
-                  <button type="button" @click="removeSetupUnit(2, index)" :disabled="setup.player2.units.length === 1">remove</button>
-                </li>
-              </template>
-            </ol>
-          </div>
-        </div>
-      </details>
+              </dl>
+              <dl class="unit-detail-list">
+                <div>
+                  <dt>Health</dt>
+                  <dd x-text="unitHealthLabel(detailUnit())"></dd>
+                </div>
+                <div>
+                  <dt>Move</dt>
+                  <dd x-text="`${movementLimitForUnit(detailUnit())}mm`"></dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd x-text="unitDetailStatus(detailUnit())"></dd>
+                </div>
+              </dl>
+            </article>
+          </template>
+        </section>
       </div>
     </section>
 
@@ -153,6 +151,64 @@
       </ol>
     </section>
   </main>
+
+  <div class="modal-backdrop" x-show="newGameConfigOpen" @click.self="closeNewGameConfig()" x-cloak>
+    <section class="modal setup-modal" role="dialog" aria-modal="true" aria-labelledby="new-game-title">
+      <div class="modal-header">
+        <h2 id="new-game-title">New Game</h2>
+        <button type="button" @click="closeNewGameConfig()" x-show="game" aria-label="Close new game setup">Close</button>
+      </div>
+      <label>Battlemap
+        <select x-model="setup.battlemapId">
+          <option value="old_road">Old Road</option>
+          <option value="forest_wall">Forest Wall</option>
+        </select>
+      </label>
+      <div class="setup-grid">
+        <div class="setup-player">
+          <h3>Player 1</h3>
+          <label>Army
+            <select x-model="setup.player1ArmyId">
+              <option value="">Manual fallback</option>
+              <template x-for="army in armies" :key="`p1-${army.id}`">
+                <option :value="army.id" x-text="`${army.name} (${army.totalPoints}/${army.targetPoints || 0} pts)`"></option>
+              </template>
+            </select>
+          </label>
+          <ol class="setup-units" x-show="!setup.player1ArmyId">
+            <template x-for="(unit, index) in setup.player1.units" :key="`p1-${index}`">
+              <li>
+                <span x-text="`${unit.count} minis on ${unit.base}`"></span>
+                <button type="button" @click="removeSetupUnit(1, index)" :disabled="setup.player1.units.length === 1">remove</button>
+              </li>
+            </template>
+          </ol>
+        </div>
+        <div class="setup-player">
+          <h3>Player 2</h3>
+          <label>Army
+            <select x-model="setup.player2ArmyId">
+              <option value="">Manual fallback</option>
+              <template x-for="army in armies" :key="`p2-${army.id}`">
+                <option :value="army.id" x-text="`${army.name} (${army.totalPoints}/${army.targetPoints || 0} pts)`"></option>
+              </template>
+            </select>
+          </label>
+          <ol class="setup-units" x-show="!setup.player2ArmyId">
+            <template x-for="(unit, index) in setup.player2.units" :key="`p2-${index}`">
+              <li>
+                <span x-text="`${unit.count} minis on ${unit.base}`"></span>
+                <button type="button" @click="removeSetupUnit(2, index)" :disabled="setup.player2.units.length === 1">remove</button>
+              </li>
+            </template>
+          </ol>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" @click="createGame()">Confirm</button>
+      </div>
+    </section>
+  </div>
 
   <div class="modal-backdrop" x-show="loadGamesOpen" @click.self="closeLoadGames()" x-cloak>
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="load-game-title">

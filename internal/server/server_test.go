@@ -310,7 +310,7 @@ func request(t *testing.T, handler http.Handler, method, path, body string) *htt
 
 func createCombatGameWithFirstPlayer(t *testing.T, st *store.Store, playerID int) (http.Handler, *game.Game) {
 	t.Helper()
-	body := `{"player1":{"baseWidthMm":25,"baseDepthMm":25,"count":1,"stats":{"a":5,"f":1,"d":-20,"cd":1,"h":20}},"player2":{"baseWidthMm":25,"baseDepthMm":25,"count":1,"stats":{"a":5,"f":1,"d":1,"cd":1,"h":20}}}`
+	body := `{"player1":{"baseWidthMm":25,"baseDepthMm":25,"count":1,"stats":{"a":20,"d":20,"cd":1,"h":20}},"player2":{"baseWidthMm":25,"baseDepthMm":25,"count":1,"stats":{"a":1,"d":20,"cd":1,"h":20}}}`
 	for seed := int64(1); seed < 100; seed++ {
 		srv := New(st, game.NewEngine(seed)).Routes()
 		res := request(t, srv, http.MethodPost, "/api/games", body)

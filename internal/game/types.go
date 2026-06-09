@@ -83,6 +83,7 @@ type Game struct {
 	ActivePlayer        int                  `json:"activePlayer"`
 	FirstPlayer         int                  `json:"firstPlayer"`
 	Phase               string               `json:"phase"`
+	WinnerPlayerID      int                  `json:"winnerPlayerId,omitempty"`
 	PlacementIndex      int                  `json:"placementIndex"`
 	CurrentActivation   *Activation          `json:"currentActivation,omitempty"`
 	Units               []Unit               `json:"units"`

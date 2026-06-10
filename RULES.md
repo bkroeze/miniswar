@@ -34,6 +34,15 @@ until it is the last one remaining.  The officer should use a different marking 
 Units have facing.  This is a simple "X" quadrant with the center of the X being the middle point of the unit, disregarding any incomplete final rows if there are more than one row.  
 The front facing quadrant is called "front", the others proceding clockwise are "right", "rear", and "left".
 
+## Terrain
+
+The arena can contain terrain zones measured in millimeters.
+
+- Rough terrain doubles movement cost only for the portion of a move where the unit overlaps it.
+- Impassable terrain blocks placement, movement, pivot, about face, combat alignment, and pushback or withdraw movement.
+- Path terrain is currently visual only.
+- Passable obstacles do not block movement, but a unit moving into combat across or into contact with one counts as attacking an enemy behind fortifications.
+
 ## Activating
 
 During play, players alternate activating units.  Each unit is activated once before the next turn.
@@ -83,9 +92,9 @@ Modifiers are:
 - ranks, only if fighting an enemy in the front facing: -(1 * number-of-full-ranks-in-unit -1)
 - attacking left, right or rear: -1
 - unit is defending its rear face: +1
-- unit is Disordered (a morale effect): +1
+- attacking unit is Disordered (a morale effect): +1
 - unit is fighting from a lower elevation: +1 <-- this is a no-op for now, since we don't have elevations, but put in a hook for it with a comment
-- unit moved into combat with an enemy behind fortifications: +1 <-- requires we add a new form of obstacle, a passable obstacle.
+- unit moved into combat with an enemy behind fortifications: +1, detected when the move crosses or contacts a passable obstacle.
 
 #### Roll Combat Dice
 
@@ -139,7 +148,7 @@ A unit never takes more than one morale test in a turn. If multiple morale trigg
 
 A unit becoming "Broken" causes a morale test with no modifiers to friendly units within 8" of the unit.  This can cause a cascade among units owned by the same player.
 
-When only one player has units left on the battlefield, that player wins.
+When only one player has units left on the battlefield, that player wins. If no player has active units left, the game is a draw.
 
 ### Disordered Units
 

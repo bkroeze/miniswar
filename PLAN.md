@@ -42,7 +42,7 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
   - `PATCH /api/armies/{id}/units/{unitID}` updates moniker, mini count, and current health.
   - `DELETE /api/armies/{id}/units/{unitID}` removes a roster unit.
 - Game API:
-  - `POST /api/games` creates a game. The request can provide `player1Units` and `player2Units`, legacy `player1` and `player2`, or `player1ArmyId` and `player2ArmyId` to load roster units.
+  - `POST /api/games` creates a game. The request can provide `player1Units` and `player2Units`, legacy `player1` and `player2`, or `player1ArmyId` and `player2ArmyId` to load roster units. Manual units use `baseWidthMm`, `baseDepthMm`, `count`, optional `name`, optional catalog/army identity fields, optional `stats`, and optional health fields.
   - `GET /api/games` lists saved games.
   - `GET /api/games/{id}` returns full game state.
   - `POST /api/games/{id}/placements` places the next setup unit from `{ "playerId": number, "unitId": string, "x": number, "y": number, "facingDeg": number }`.
@@ -52,6 +52,8 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
   - `POST /api/games/{id}/rewind` rewinds to `{ "actionIndex": number }` and deletes later snapshots.
 - Game mutation responses use `APIResponse` where practical: `ok`, `game`, `action`, `roll`, `legalActions`, `messages`, and `errors`.
 - Army and catalog responses use the same `ok`, domain object, and `messages` pattern.
+- `battlemapId` defaults to `old_road`; the current choices are `old_road` and `forest_wall`, and unknown IDs are rejected.
+- Adding template or roster units with `miniCount` omitted or `0` uses one full rank for that base size, and counts above the base maximum are clamped. Roster `currentHealth` is clamped between `0` and the unit's max health.
 
 ## Game Behavior
 
@@ -67,11 +69,15 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
   - `about_face`: reverse facing and reorganize ranks according to the base layout rules.
   - `skip`: end the activation.
 - A unit with an `M` stat moves `M * 25mm`; units without stats use `100mm`.
+- Rough terrain doubles movement cost only for the overlapping portion of a move. Impassable terrain blocks placement, movement, pivot, about-face, combat alignment, and pushback/withdraw movement. Path terrain is currently visual only.
+- Units may pass through friendly units only if the move fully clears them; otherwise movement backs up to the last clear position. Enemy contact during forward or backward movement triggers combat.
 - Moving into an enemy creates an engagement, snaps the attacker flush to the defender face when possible, and resolves a combat round.
 - Activating a unit already engaged with an enemy also resolves combat before ordinary actions continue.
 - Combat records dice counts, target numbers, modifiers, rolls, hits, casualties, morale tests, broken units, winners, and pending pushback choices.
 - While a pending combat choice exists, legal actions are limited to `combat_pushback` with one of `pushback_25`, `pushback_75`, `withdraw_25`, or `decline`.
-- When only one player has units left on the battlefield, that player wins and the game phase becomes `complete`.
+- Passable-obstacle terrain does not block movement, but it marks a defender as fortified when the attacker crosses or contacts it while moving into combat.
+- Roster health is copied into each mini when a game starts. Units with zero current health start removed, are skipped during placement and activation, and can immediately determine a win or draw after setup.
+- When only one player has units left on the battlefield, that player wins and the game phase becomes `complete`. If no player has active units left, the game completes as a draw.
 - Store pre-action snapshots so rewind works during active, pending-combat, and completed games.
 
 ## Test Plan

@@ -116,6 +116,7 @@ func (e *Engine) NewGame(setup Setup) (*Game, error) {
 		units = append(units, unit)
 	}
 	first := e.rng.Intn(2) + 1
+	gameSeed := e.rng.Int63()
 	return &Game{
 		ID:                  fmt.Sprintf("%d-%06d", time.Now().UnixNano(), e.rng.Intn(1000000)),
 		Round:               1,
@@ -126,7 +127,7 @@ func (e *Engine) NewGame(setup Setup) (*Game, error) {
 		ActionHistory:       []ActionRecord{},
 		Snapshots:           []SnapshotRecord{},
 		CreatedAt:           time.Now().UTC(),
-		RandomSeed:          e.seed,
+		RandomSeed:          gameSeed,
 		RandomRollIndex:     0,
 		OpeningInitiativeD2: first,
 		Battlemap:           battlemap,

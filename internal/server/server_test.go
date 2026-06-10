@@ -299,6 +299,84 @@ func TestCreateGameFromSavedArmies(t *testing.T) {
 	}
 }
 
+func TestPatchTemplateUnitPreservesOmittedFields(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	units, err := st.CatalogUnits("Dwarf", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tpl, err := st.CreateArmyTemplate("Template", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tpl, err = st.AddTemplateUnit(tpl.ID, units[0].ID, "Old Name", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(st, game.NewEngine(1)).Routes()
+	res := request(t, srv, http.MethodPatch, "/api/army-templates/"+tpl.ID+"/units/"+tpl.Units[0].ID, `{"moniker":"New Name"}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("patch status %d: %s", res.Code, res.Body.String())
+	}
+	var patched struct {
+		Template store.ArmyTemplate `json:"template"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &patched); err != nil {
+		t.Fatal(err)
+	}
+	line := patched.Template.Units[0]
+	if line.DefaultMoniker != "New Name" || line.MiniCount != 3 {
+		t.Fatalf("patched line = %#v, want changed moniker and preserved mini count", line)
+	}
+}
+
+func TestPatchArmyUnitPreservesOmittedFields(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	units, err := st.CatalogUnits("Dwarf", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	army, err := st.CreateArmy("Army", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	army, err = st.AddArmyUnit(army.ID, units[0].ID, "Old Name", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	army, err = st.UpdateArmyUnit(army.ID, army.Units[0].ID, "Old Name", 3, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(st, game.NewEngine(1)).Routes()
+	res := request(t, srv, http.MethodPatch, "/api/armies/"+army.ID+"/units/"+army.Units[0].ID, `{"moniker":"New Name"}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("patch status %d: %s", res.Code, res.Body.String())
+	}
+	var patched struct {
+		Army store.Army `json:"army"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &patched); err != nil {
+		t.Fatal(err)
+	}
+	line := patched.Army.Units[0]
+	if line.Moniker != "New Name" || line.MiniCount != 3 || line.CurrentHealth != 2 {
+		t.Fatalf("patched line = %#v, want changed moniker and preserved count/health", line)
+	}
+}
+
 func request(t *testing.T, handler http.Handler, method, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(method, path, bytes.NewBufferString(body))

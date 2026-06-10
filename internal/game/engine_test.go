@@ -93,6 +93,27 @@ func TestNewGameCarriesRosterCurrentHealthIntoMinis(t *testing.T) {
 	}
 }
 
+func TestNewGameUsesDistinctRandomSeeds(t *testing.T) {
+	engine := NewEngine(1)
+	first, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.RandomSeed == second.RandomSeed {
+		t.Fatalf("game random seeds should differ, both were %d", first.RandomSeed)
+	}
+}
+
 func TestInvalidBaseAndCount(t *testing.T) {
 	engine := NewEngine(1)
 	_, err := engine.NewGame(Setup{

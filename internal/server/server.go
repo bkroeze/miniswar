@@ -338,12 +338,30 @@ func (s *Server) addTemplateUnit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) updateTemplateUnit(w http.ResponseWriter, r *http.Request) {
-	var req unitLineRequest
+	var req unitLinePatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	t, err := s.store.UpdateTemplateUnit(r.PathValue("id"), r.PathValue("unitID"), req.Moniker, req.MiniCount)
+	t, err := s.store.GetArmyTemplate(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	line, ok := templateUnitByID(t, r.PathValue("unitID"))
+	if !ok {
+		writeError(w, http.StatusInternalServerError, sql.ErrNoRows)
+		return
+	}
+	moniker := line.DefaultMoniker
+	if req.Moniker != nil {
+		moniker = *req.Moniker
+	}
+	miniCount := line.MiniCount
+	if req.MiniCount != nil {
+		miniCount = *req.MiniCount
+	}
+	t, err = s.store.UpdateTemplateUnit(r.PathValue("id"), r.PathValue("unitID"), moniker, miniCount)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -435,12 +453,34 @@ func (s *Server) addArmyUnit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) updateArmyUnit(w http.ResponseWriter, r *http.Request) {
-	var req unitLineRequest
+	var req unitLinePatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	army, err := s.store.UpdateArmyUnit(r.PathValue("id"), r.PathValue("unitID"), req.Moniker, req.MiniCount, req.CurrentHealth)
+	army, err := s.store.GetArmy(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	line, ok := armyUnitByID(army, r.PathValue("unitID"))
+	if !ok {
+		writeError(w, http.StatusInternalServerError, sql.ErrNoRows)
+		return
+	}
+	moniker := line.Moniker
+	if req.Moniker != nil {
+		moniker = *req.Moniker
+	}
+	miniCount := line.MiniCount
+	if req.MiniCount != nil {
+		miniCount = *req.MiniCount
+	}
+	currentHealth := line.CurrentHealth
+	if req.CurrentHealth != nil {
+		currentHealth = *req.CurrentHealth
+	}
+	army, err = s.store.UpdateArmyUnit(r.PathValue("id"), r.PathValue("unitID"), moniker, miniCount, currentHealth)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -467,6 +507,30 @@ type unitLineRequest struct {
 	Moniker       string `json:"moniker"`
 	MiniCount     int    `json:"miniCount"`
 	CurrentHealth int    `json:"currentHealth"`
+}
+
+type unitLinePatchRequest struct {
+	Moniker       *string `json:"moniker"`
+	MiniCount     *int    `json:"miniCount"`
+	CurrentHealth *int    `json:"currentHealth"`
+}
+
+func templateUnitByID(template store.ArmyTemplate, id string) (store.ArmyTemplateUnit, bool) {
+	for _, unit := range template.Units {
+		if unit.ID == id {
+			return unit, true
+		}
+	}
+	return store.ArmyTemplateUnit{}, false
+}
+
+func armyUnitByID(army store.Army, id string) (store.ArmyUnit, bool) {
+	for _, unit := range army.Units {
+		if unit.ID == id {
+			return unit, true
+		}
+	}
+	return store.ArmyUnit{}, false
 }
 
 type fromTemplateRequest struct {

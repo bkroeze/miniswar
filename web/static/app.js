@@ -11,6 +11,7 @@ function createMiniswarApp() {
     savedGames: [],
     savedGamesLoading: false,
     armies: [],
+    armyDefaultsApplied: false,
     setup: {
       battlemapId: "old_road",
       player1ArmyId: "",
@@ -30,7 +31,7 @@ function createMiniswarApp() {
     },
 
     async initGame() {
-      await this.loadArmies();
+      await this.loadArmies({ defaultSelections: true });
       this.openNewGameConfig();
     },
 
@@ -80,12 +81,15 @@ function createMiniswarApp() {
       this.messages = [...(response.messages || []), ...(response.errors || [])];
     },
 
-    async loadArmies() {
+    async loadArmies({ defaultSelections = false } = {}) {
       const response = await this.api("/api/armies");
       if (response.ok) {
         this.armies = response.armies || [];
-        if (!this.setup.player1ArmyId && this.armies[0]) this.setup.player1ArmyId = this.armies[0].id;
-        if (!this.setup.player2ArmyId && this.armies[1]) this.setup.player2ArmyId = this.armies[1].id;
+        if (defaultSelections && !this.armyDefaultsApplied) {
+          if (!this.setup.player1ArmyId && this.armies[0]) this.setup.player1ArmyId = this.armies[0].id;
+          if (!this.setup.player2ArmyId && this.armies[1]) this.setup.player2ArmyId = this.armies[1].id;
+          this.armyDefaultsApplied = true;
+        }
       }
     },
 
@@ -287,9 +291,17 @@ function createMiniswarApp() {
 
     unitHealthLabel(unit) {
       if (!unit) return "-";
+      const minis = unit.minis || [];
+      if (minis.length) {
+        const active = minis.filter((mini) => !mini.removed).length;
+        const perMiniMax = unit.maxHealth || unit.stats?.h || unit.currentHealth || 1;
+        const remainingHealth = minis.reduce((total, mini) => total + (mini.removed ? 0 : Math.max(0, mini.healthRemaining ?? perMiniMax)), 0);
+        const maxHealth = minis.length * perMiniMax;
+        if (perMiniMax > 1 || remainingHealth !== active) return `${remainingHealth}/${maxHealth} HP (${active}/${minis.length} minis)`;
+        return `${active}/${minis.length} minis`;
+      }
       if (unit.currentHealth || unit.maxHealth) return `${unit.currentHealth || 0}/${unit.maxHealth || unit.currentHealth || 0}`;
-      const active = (unit.minis || []).filter((mini) => !mini.removed).length;
-      return `${active}/${(unit.minis || []).length} minis`;
+      return "-";
     },
 
     unitDetailStatus(unit) {

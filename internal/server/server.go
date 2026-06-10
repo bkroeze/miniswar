@@ -81,17 +81,15 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Player1ArmyID != "" {
-		units, err := s.store.ArmyUnitSetups(req.Player1ArmyID, 1)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, err)
+		units, ok := s.gameArmyUnitSetups(w, req.Player1ArmyID, 1)
+		if !ok {
 			return
 		}
 		req.Player1Units = units
 	}
 	if req.Player2ArmyID != "" {
-		units, err := s.store.ArmyUnitSetups(req.Player2ArmyID, 2)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, err)
+		units, ok := s.gameArmyUnitSetups(w, req.Player2ArmyID, 2)
+		if !ok {
 			return
 		}
 		req.Player2Units = units
@@ -115,6 +113,23 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, game.APIResponse{OK: true, Game: g, LegalActions: game.LegalActions(g), Messages: []string{"Game created."}})
+}
+
+func (s *Server) gameArmyUnitSetups(w http.ResponseWriter, armyID string, playerID int) ([]game.UnitSetup, bool) {
+	units, err := s.store.ArmyUnitSetups(armyID, playerID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusBadRequest, missingResource("army", armyID))
+			return nil, false
+		}
+		writeError(w, http.StatusBadRequest, err)
+		return nil, false
+	}
+	if len(units) == 0 {
+		writeErrorMessage(w, http.StatusBadRequest, emptyArmyResource(armyID))
+		return nil, false
+	}
+	return units, true
 }
 
 func (s *Server) listGames(w http.ResponseWriter, r *http.Request) {
@@ -642,6 +657,13 @@ func missingResource(kind, id string) string {
 		return kind + " is missing"
 	}
 	return kind + " " + strconv.Quote(id) + " not found"
+}
+
+func emptyArmyResource(id string) string {
+	if id == "" {
+		return "army has no units"
+	}
+	return "army " + strconv.Quote(id) + " has no units"
 }
 
 func cleanErr(err error) string {

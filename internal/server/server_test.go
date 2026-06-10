@@ -299,6 +299,23 @@ func TestCreateGameFromSavedArmies(t *testing.T) {
 	}
 }
 
+func TestCreateGameFromSavedArmiesReportsBadRosterReferences(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	emptyArmy, err := st.CreateArmy("Empty Army", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(st, game.NewEngine(1)).Routes()
+	assertJSONError(t, request(t, srv, http.MethodPost, "/api/games", `{"player1ArmyId":"missing-army","player2":{"baseWidthMm":25,"baseDepthMm":25,"count":5}}`), http.StatusBadRequest, `army "missing-army" not found`)
+	assertJSONError(t, request(t, srv, http.MethodPost, "/api/games", `{"player1ArmyId":"`+emptyArmy.ID+`","player2":{"baseWidthMm":25,"baseDepthMm":25,"count":5}}`), http.StatusBadRequest, `army "`+emptyArmy.ID+`" has no units`)
+}
+
 func TestPatchTemplateUnitPreservesOmittedFields(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
 	if err != nil {

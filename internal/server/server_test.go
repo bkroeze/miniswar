@@ -316,6 +316,84 @@ func TestCreateGameFromSavedArmiesReportsBadRosterReferences(t *testing.T) {
 	assertJSONError(t, request(t, srv, http.MethodPost, "/api/games", `{"player1ArmyId":"`+emptyArmy.ID+`","player2":{"baseWidthMm":25,"baseDepthMm":25,"count":5}}`), http.StatusBadRequest, `army "`+emptyArmy.ID+`" has no units`)
 }
 
+func TestPatchArmyTemplateMetadataPreservesOmittedFields(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	tpl, err := st.CreateArmyTemplate("Template", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(st, game.NewEngine(1)).Routes()
+	res := request(t, srv, http.MethodPatch, "/api/army-templates/"+tpl.ID, `{"name":"Skirmish"}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("patch status %d: %s", res.Code, res.Body.String())
+	}
+	var patched struct {
+		Template store.ArmyTemplate `json:"template"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &patched); err != nil {
+		t.Fatal(err)
+	}
+	if patched.Template.Name != "Skirmish" || patched.Template.TargetPoints != 100 {
+		t.Fatalf("patched template = %#v, want changed name and preserved target points", patched.Template)
+	}
+
+	res = request(t, srv, http.MethodPatch, "/api/army-templates/"+tpl.ID, `{"targetPoints":75}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("patch status %d: %s", res.Code, res.Body.String())
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &patched); err != nil {
+		t.Fatal(err)
+	}
+	if patched.Template.Name != "Skirmish" || patched.Template.TargetPoints != 75 {
+		t.Fatalf("patched template = %#v, want preserved name and changed target points", patched.Template)
+	}
+}
+
+func TestPatchArmyMetadataPreservesOmittedFields(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	army, err := st.CreateArmy("Army", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(st, game.NewEngine(1)).Routes()
+	res := request(t, srv, http.MethodPatch, "/api/armies/"+army.ID, `{"name":"Skirmish"}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("patch status %d: %s", res.Code, res.Body.String())
+	}
+	var patched struct {
+		Army store.Army `json:"army"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &patched); err != nil {
+		t.Fatal(err)
+	}
+	if patched.Army.Name != "Skirmish" || patched.Army.TargetPoints != 100 {
+		t.Fatalf("patched army = %#v, want changed name and preserved target points", patched.Army)
+	}
+
+	res = request(t, srv, http.MethodPatch, "/api/armies/"+army.ID, `{"targetPoints":75}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("patch status %d: %s", res.Code, res.Body.String())
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &patched); err != nil {
+		t.Fatal(err)
+	}
+	if patched.Army.Name != "Skirmish" || patched.Army.TargetPoints != 75 {
+		t.Fatalf("patched army = %#v, want preserved name and changed target points", patched.Army)
+	}
+}
+
 func TestPatchTemplateUnitPreservesOmittedFields(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
 	if err != nil {

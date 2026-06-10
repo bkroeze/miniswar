@@ -329,17 +329,30 @@ func (s *Server) getArmyTemplate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) updateArmyTemplate(w http.ResponseWriter, r *http.Request) {
-	var req armyNameRequest
+	var req armyNamePatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	t, err := s.store.UpdateArmyTemplate(r.PathValue("id"), req.Name, req.TargetPoints)
+	t, err := s.store.GetArmyTemplate(r.PathValue("id"))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeErrorMessage(w, http.StatusNotFound, missingResource("army template", r.PathValue("id")))
 			return
 		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	name := t.Name
+	if req.Name != nil {
+		name = *req.Name
+	}
+	targetPoints := t.TargetPoints
+	if req.TargetPoints != nil {
+		targetPoints = *req.TargetPoints
+	}
+	t, err = s.store.UpdateArmyTemplate(r.PathValue("id"), name, targetPoints)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -485,17 +498,30 @@ func (s *Server) getArmy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) updateArmy(w http.ResponseWriter, r *http.Request) {
-	var req armyNameRequest
+	var req armyNamePatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	army, err := s.store.UpdateArmy(r.PathValue("id"), req.Name, req.TargetPoints)
+	army, err := s.store.GetArmy(r.PathValue("id"))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeErrorMessage(w, http.StatusNotFound, missingResource("army", r.PathValue("id")))
 			return
 		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	name := army.Name
+	if req.Name != nil {
+		name = *req.Name
+	}
+	targetPoints := army.TargetPoints
+	if req.TargetPoints != nil {
+		targetPoints = *req.TargetPoints
+	}
+	army, err = s.store.UpdateArmy(r.PathValue("id"), name, targetPoints)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -593,6 +619,11 @@ func (s *Server) deleteArmyUnit(w http.ResponseWriter, r *http.Request) {
 type armyNameRequest struct {
 	Name         string `json:"name"`
 	TargetPoints int    `json:"targetPoints"`
+}
+
+type armyNamePatchRequest struct {
+	Name         *string `json:"name"`
+	TargetPoints *int    `json:"targetPoints"`
 }
 
 type unitLineRequest struct {

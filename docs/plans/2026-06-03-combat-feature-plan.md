@@ -9,13 +9,13 @@ date: 2026-06-03
 
 ## Summary
 
-Implement the combat rules now present in `RULES.md`: move into combat, round-of-combat dice resolution, hits and casualty removal, morale effects, broken-unit removal, and post-combat pushback or withdraw choices. The implementation should keep combat fully API-driven, rewindable, and visible in the SVG arena.
+Implemented the combat rules now present in `RULES.md`: move into combat, round-of-combat dice resolution, hits and casualty removal, morale effects, broken-unit removal, and post-combat pushback or withdraw choices. The implementation keeps combat fully API-driven, rewindable, and visible in the SVG arena.
 
 ---
 
 ## Problem Frame
 
-The current engine treats enemy units as blocking movement obstacles in `internal/game/engine.go`; it has no combat state, mini-level health, morale status, or post-combat choice handling. `RULES.md` now defines enough combat behavior to make enemy contact a first-class game transition instead of a movement stop. Because this repo prioritizes automation, every combat roll, modifier, casualty, morale result, and pushback option needs structured JSON feedback rather than UI-only handling.
+Before this work, the engine treated enemy units as blocking movement obstacles in `internal/game/engine.go`; it had no combat state, mini-level health, morale status, or post-combat choice handling. `RULES.md` now defines enough combat behavior to make enemy contact a first-class game transition instead of a movement stop. Because this repo prioritizes automation, every combat roll, modifier, casualty, morale result, and pushback option uses structured JSON feedback rather than UI-only handling.
 
 ---
 
@@ -36,7 +36,7 @@ The current engine treats enemy units as blocking movement obstacles in `interna
   - if fighting an enemy on the front face, multiply `CD` by the number of active minis in the front rank;
   - if fighting an enemy on the left, right, or rear face, multiply `CD` by the number of full active ranks;
   - final dice count is at least 1.
-- R8. Each side's target number must follow the written rule formula: attacking unit `F` minus defending unit `D`, plus applicable modifiers.
+- R8. Each side's target number must follow the written rule formula: defending unit `D` minus attacking unit `A`, plus applicable modifiers.
 - R9. Combat rolls must record every D10 result, hit count, target number, and modifier used for each side.
 - R10. A roll counts as one hit when it meets or exceeds the target number, two hits when it exceeds by at least 5, and three hits when it exceeds by at least 10.
 
@@ -110,14 +110,14 @@ The combat resolver should return a structured `CombatRoundResult` that can be e
 
 ## Data Model Shape
 
-The exact type names can follow local style, but the state needs these concepts in `internal/game/types.go`:
+The implemented state uses these concepts in `internal/game/types.go`:
 
-- `Mini.HealthRemaining`, `Mini.Removed`, and optionally `Mini.RemovedAtActionIndex`.
-- `Unit.Status` or explicit fields such as `Disordered bool` and `Broken bool`.
+- `Mini.HealthRemaining` and `Mini.Removed`.
+- Explicit unit status fields: `Disordered bool` and `Broken bool`.
 - `CombatEngagement` with ID, attacker unit ID, defender unit ID, defender face, original movement axis, active flag, created round, and created action index.
 - `CombatRoundResult` for action history results, including side-specific rolls and modifiers.
 - `PendingCombatChoice` with engagement ID, winning player, winning unit, losing unit, legal choices, movement axis, and source action index.
-- A snapshot-restorable random cursor or random state field on `Game`.
+- `Game.RandomRollIndex` as the snapshot-restorable random cursor.
 
 Existing games without these fields should unmarshal as healthy, not engaged, not disordered, and with no pending choices.
 
@@ -319,8 +319,8 @@ Existing games without these fields should unmarshal as healthy, not engaged, no
 
 ## Risks and Dependencies
 
-- **Target formula ambiguity:** The written target-number formula may produce counterintuitive probabilities because higher `F` directly raises the number to meet or exceed. Mitigation: implement the text exactly, isolate the helper, and pin tests so later rule edits are straightforward.
-- **Random rewind correctness:** Current activation rolls use engine-level RNG rather than game-snapshotted random state. Mitigation: fix the random model before adding combat dice.
+- **Target formula ambiguity:** The written target-number formula may produce counterintuitive probabilities as `D - A` plus modifiers. Mitigation: implement the text exactly, isolate the helper, and pin tests so later rule edits are straightforward.
+- **Random rewind correctness:** Activation, combat, and morale rolls now use `Game.RandomRollIndex` so snapshots restore random progress.
 - **Pushback timing:** Pushback is a player choice inside a combat round. Mitigation: model it as pending state so automation can inspect and submit the choice explicitly.
 - **Casualty state compatibility:** Existing game JSON lacks mini health fields. Mitigation: zero-value handling should treat missing mini health as full health from unit stats/defaults during load or before first combat calculation.
 - **Geometry edge cases:** Flush alignment can fail near obstacles or arena edges. Mitigation: validate final pose and return blocked alignment feedback instead of forcing overlap.

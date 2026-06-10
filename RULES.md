@@ -22,6 +22,9 @@ Units have a "base size" in mm.
 - 50x100mm
   - largest monsters, such as dragons
   - always a unit of 1
+- 100x50mm
+  - artillery and other wide crews
+  - always a unit of 1
 
 All units designate one mini as the *officer*.  The officer must be placed in one of the two center positions of the first rank.  As minis are removed due to damage, the officer is never selected
 until it is the last one remaining.  The officer should use a different marking or something to indicate which one it is.
@@ -37,14 +40,14 @@ During play, players alternate activating units.  Each unit is activated once be
 
 When activated, unless special rules apply, each unit gets 2 actions.  They can use these actions in any order.
 
-- Move, up to the unit's movement limit in a straight line forward, or backwards up to half of the unit's movement.  If this is done a second time in one activation, the movement rate is halved.
+- Move, up to the unit's movement limit in a straight line forward, or backwards up to half of the unit's movement.  If this is done a second time in one activation, the movement rate is halved.  A unit with an `M` stat moves `M * 25mm`; otherwise it uses the default `100mm`.
 - Pivot, done by pivoting about the officer to any new direction
-- Wheel, done by picking a unit to use as an anchor point, and moving the rest of the unit swinging with that pivot point
 - About Face - which reorganizes the back line with a full line and moves the officer
-- Shoot - unit may may a ranged attack, with a penalty if it moved as its first action
-- Special abilities
+- Skip - end the current activation's remaining actions
 
-A unit that fails its activation roll may only take one *simple* action during its activation: maove, pivot, wheel, about face, shoot.  Shooting carries the same penalty as it would if this was a full activation and the unit had moved in the same activation.
+Wheel, shoot, and special abilities are planned rules, but are not currently available actions.
+
+A unit that fails its activation roll may only take one *simple* action during its activation: move, pivot, about face, or skip.
 
 ## Move into Combat
 

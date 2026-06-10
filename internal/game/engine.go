@@ -201,10 +201,15 @@ func layoutMinis(unit Unit, count int) []Mini {
 			WidthMM:         unit.Base.WidthMM,
 			DepthMM:         unit.Base.DepthMM,
 			IsOfficer:       rank == 0 && file == officerFile,
-			HealthRemaining: miniMaxHealth(unit),
+			HealthRemaining: miniStartingHealth(unit),
 		})
 	}
 	return minis
+}
+
+func cloneUnit(unit Unit) Unit {
+	unit.Minis = slices.Clone(unit.Minis)
+	return unit
 }
 
 func (e *Engine) PlaceUnit(g *Game, req PlacementRequest) (*ActionRecord, error) {
@@ -418,9 +423,14 @@ func (e *Engine) ApplyAction(g *Game, req ActionRequest) (*ActionRecord, error) 
 		applyPivot(unit, anchor, req.FacingDeg, g.Battlemap.Terrains, g.Units)
 		messages = append(messages, fmt.Sprintf("Pivoted to %d degrees around %s.", unit.FacingDeg, anchor.Key))
 	case ActionAboutFace:
-		if err := applyAboutFace(unit); err != nil {
+		candidate := cloneUnit(*unit)
+		if err := applyAboutFace(&candidate); err != nil {
 			return nil, err
 		}
+		if err := validateUnitPosition(candidate, g.Battlemap.Terrains, g.Units); err != nil {
+			return nil, err
+		}
+		*unit = candidate
 		messages = append(messages, "About face completed.")
 	case ActionSkip:
 		skipped := act.ActionsRemaining
@@ -677,7 +687,7 @@ func (e *Engine) applyMove(g *Game, unit *Unit, act *Activation, req ActionReque
 				Active:             true,
 			}
 			g.Engagements = append(g.Engagements, engagement)
-			combat := e.resolveCombatRound(g, engagement, actionIndex, unit.ID)
+			combat := e.resolveCombatRound(g, engagement, actionIndex, unit.ID, nil)
 			return MoveResult{
 				Status:         "entered_combat",
 				DistanceMM:     moved + step,
@@ -915,6 +925,7 @@ func combatPoseValid(unit Unit, defenderID string, terrains []TerrainZone, units
 
 func (e *Engine) resolveCombatsForUnit(g *Game, unitID string, actionIndex int) []CombatRoundResult {
 	var results []CombatRoundResult
+	moraleTested := moraleTestedThisRound(g)
 	for _, engagement := range g.Engagements {
 		if !engagement.Active {
 			continue
@@ -922,7 +933,7 @@ func (e *Engine) resolveCombatsForUnit(g *Game, unitID string, actionIndex int) 
 		if engagement.AttackerUnitID != unitID && engagement.DefenderUnitID != unitID {
 			continue
 		}
-		results = append(results, e.resolveCombatRound(g, engagement, actionIndex, unitID))
+		results = append(results, e.resolveCombatRound(g, engagement, actionIndex, unitID, moraleTested))
 		if g.PendingCombatChoice != nil {
 			break
 		}
@@ -930,7 +941,7 @@ func (e *Engine) resolveCombatsForUnit(g *Game, unitID string, actionIndex int) 
 	return results
 }
 
-func (e *Engine) resolveCombatRound(g *Game, engagement CombatEngagement, actionIndex int, activeUnitID string) CombatRoundResult {
+func (e *Engine) resolveCombatRound(g *Game, engagement CombatEngagement, actionIndex int, activeUnitID string, moraleTested map[string]bool) CombatRoundResult {
 	attacker, attackerOK := findUnit(g, engagement.AttackerUnitID)
 	defender, defenderOK := findUnit(g, engagement.DefenderUnitID)
 	result := CombatRoundResult{EngagementID: engagement.ID}
@@ -951,7 +962,9 @@ func (e *Engine) resolveCombatRound(g *Game, engagement CombatEngagement, action
 	removeUnitIfNoActiveMinis(defender)
 	removeUnitIfNoActiveMinis(attacker)
 
-	moraleTested := moraleTestedThisRound(g)
+	if moraleTested == nil {
+		moraleTested = moraleTestedThisRound(g)
+	}
 	if moraleRequired(*defender, defenderHits) {
 		if activeMiniCount(*defender) > 0 {
 			if morale, ok := e.resolveMoraleOnce(g, defender, false, moraleTested); ok {
@@ -1449,6 +1462,19 @@ func applyPivot(unit *Unit, anchor Mini, facingDeg int, terrains []TerrainZone, 
 		unit.Y = nextY
 		unit.FacingDeg = nextFacing
 	}
+}
+
+func validateUnitPosition(unit Unit, terrains []TerrainZone, units []Unit) error {
+	if !unitInsideArena(unit, unit.X, unit.Y) {
+		return errors.New("action must keep the whole unit in the arena")
+	}
+	if unitOverlapsTerrain(unit, unit.X, unit.Y, terrains, TerrainImpassable) {
+		return errors.New("action overlaps impassable terrain")
+	}
+	if unitOverlapsAnyUnit(unit, unit.X, unit.Y, units) {
+		return errors.New("action overlaps another unit")
+	}
+	return nil
 }
 
 func pivotOriginForAnchor(anchor Mini, anchorX, anchorY float64, facingDeg int) (float64, float64) {
@@ -2028,14 +2054,22 @@ func miniMaxHealth(unit Unit) int {
 	return DefaultMiniHealth
 }
 
+func miniStartingHealth(unit Unit) int {
+	maxHealth := miniMaxHealth(unit)
+	if unit.CurrentHealth > 0 {
+		return min(unit.CurrentHealth, maxHealth)
+	}
+	return maxHealth
+}
+
 func initializeMiniHealth(unit *Unit) {
-	maxHealth := miniMaxHealth(*unit)
+	startingHealth := miniStartingHealth(*unit)
 	for i := range unit.Minis {
 		if unit.Minis[i].Removed {
 			continue
 		}
 		if unit.Minis[i].HealthRemaining <= 0 {
-			unit.Minis[i].HealthRemaining = maxHealth
+			unit.Minis[i].HealthRemaining = startingHealth
 		}
 	}
 }

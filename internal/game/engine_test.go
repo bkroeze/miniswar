@@ -77,6 +77,22 @@ func TestNewGameSetsMovementLimitFromMovementStat(t *testing.T) {
 	}
 }
 
+func TestNewGameCarriesRosterCurrentHealthIntoMinis(t *testing.T) {
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, MaxHealth: 4, CurrentHealth: 2, Stats: UnitStats{H: 4}},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, MaxHealth: 4, CurrentHealth: 4, Stats: UnitStats{H: 4}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mini := range g.Units[0].Minis {
+		if mini.HealthRemaining != 2 {
+			t.Fatalf("mini health = %d, want roster current health 2", mini.HealthRemaining)
+		}
+	}
+}
+
 func TestInvalidBaseAndCount(t *testing.T) {
 	engine := NewEngine(1)
 	_, err := engine.NewGame(Setup{
@@ -661,6 +677,41 @@ func TestMoraleCascadeSkipsUnitsAlreadyTestedThisRound(t *testing.T) {
 	}
 }
 
+func TestActivationCombatMoraleTestedOnceAcrossEngagements(t *testing.T) {
+	engine := NewEngine(29)
+	attacker := oneMiniUnit("u1", 1, 100, 100, 0)
+	attacker.Stats = UnitStats{A: 20, D: 1, CD: 1, H: 20}
+	attacker.CurrentHealth = 20
+	defender := oneMiniUnit("u2", 2, 100, 75, 180)
+	defender.Stats = UnitStats{A: 20, D: 1, CD: 1, H: 20}
+	defender.CurrentHealth = 20
+	g := &Game{
+		Round:      1,
+		RandomSeed: 29,
+		Battlemap:  Battlemaps()[0],
+		Units:      []Unit{attacker, defender},
+		Engagements: []CombatEngagement{
+			{ID: "combat-1", AttackerUnitID: "u1", DefenderUnitID: "u2", DefenderFace: CombatFaceFront, Active: true},
+			{ID: "combat-2", AttackerUnitID: "u1", DefenderUnitID: "u2", DefenderFace: CombatFaceFront, Active: true},
+		},
+	}
+
+	results := engine.resolveCombatsForUnit(g, "u1", 0)
+
+	if len(results) != 2 {
+		t.Fatalf("combat rounds = %d, want 2", len(results))
+	}
+	tested := map[string]int{}
+	for _, result := range results {
+		for _, morale := range result.MoraleTests {
+			tested[morale.UnitID]++
+		}
+	}
+	if tested["u1"] != 1 || tested["u2"] != 1 {
+		t.Fatalf("morale tests = %#v, want each engaged unit tested once", tested)
+	}
+}
+
 func TestNewGameSelectsBattlemapAndKeepsPlacementsOffImpassable(t *testing.T) {
 	engine := NewEngine(1)
 	g, err := engine.NewGame(Setup{
@@ -1212,6 +1263,46 @@ func TestAboutFaceSwapsOfficerWithLastFullRankAndKeepsPartialRankBack(t *testing
 	}
 	if updated.FacingDeg != 180 {
 		t.Fatalf("got facing %d", updated.FacingDeg)
+	}
+}
+
+func TestAboutFaceRejectsInvalidResultAndKeepsUnitUnchanged(t *testing.T) {
+	engine := NewEngine(4)
+	g, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 12},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	placeDefaultUnits(g)
+	unit := &g.Units[0]
+	blockedZone := TerrainZone{ID: "blocked-about-face", Type: TerrainImpassable, Shape: "rect", X: 120, Y: 105, Width: 125, Height: 25}
+	g.Battlemap.Terrains = []TerrainZone{blockedZone}
+	candidate := cloneUnit(*unit)
+	if err := applyAboutFace(&candidate); err != nil {
+		t.Fatal(err)
+	}
+	if unitOverlapsTerrain(*unit, unit.X, unit.Y, g.Battlemap.Terrains, TerrainImpassable) {
+		t.Fatal("test setup overlaps before about face")
+	}
+	if !unitOverlapsTerrain(candidate, candidate.X, candidate.Y, g.Battlemap.Terrains, TerrainImpassable) {
+		t.Fatal("test setup does not block about face result")
+	}
+	before := cloneUnit(*unit)
+	g.CurrentActivation = &Activation{UnitID: unit.ID, PlayerID: unit.PlayerID, Success: true, ActionsRemaining: 1}
+
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: unit.PlayerID, UnitID: unit.ID, Type: ActionAboutFace}); err == nil {
+		t.Fatal("expected about face validation error")
+	}
+	updated, _ := findUnit(g, unit.ID)
+	if updated.X != before.X || updated.Y != before.Y || updated.FacingDeg != before.FacingDeg {
+		t.Fatalf("unit moved despite rejected about face: got (%v,%v,%d), want (%v,%v,%d)", updated.X, updated.Y, updated.FacingDeg, before.X, before.Y, before.FacingDeg)
+	}
+	for i := range updated.Minis {
+		if updated.Minis[i].Rank != before.Minis[i].Rank || updated.Minis[i].File != before.Minis[i].File {
+			t.Fatalf("mini %d changed despite rejected about face: got %+v want %+v", i, updated.Minis[i], before.Minis[i])
+		}
 	}
 }
 

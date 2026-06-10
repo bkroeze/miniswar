@@ -95,6 +95,25 @@ func TestTemplateRosterAndArmyUnitSetup(t *testing.T) {
 	}
 }
 
+func TestForeignKeysRejectOrphanArmyUnits(t *testing.T) {
+	st := openTestStore(t)
+	catalog, err := st.CatalogUnits("Dwarf", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := st.AddArmyUnit("missing-army", catalog[0].ID, "Orphan", 1); err == nil {
+		t.Fatal("expected foreign key error")
+	}
+	var count int
+	if err := st.db.QueryRow(`select count(*) from army_units where army_id = ?`, "missing-army").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("orphan rows = %d, want 0", count)
+	}
+}
+
 func TestDefaultMiniCountUsesOneRank(t *testing.T) {
 	st := openTestStore(t)
 	units, err := st.CatalogUnits("Dwarf", "")

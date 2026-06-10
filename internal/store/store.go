@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"miniswar/internal/game"
@@ -18,8 +20,12 @@ type Store struct {
 }
 
 func Open(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteDSN(path))
 	if err != nil {
+		return nil, err
+	}
+	if _, err := db.Exec(`pragma foreign_keys = on`); err != nil {
+		db.Close()
 		return nil, err
 	}
 	s := &Store{db: db}
@@ -32,6 +38,24 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+func sqliteDSN(path string) string {
+	if strings.HasPrefix(path, "file:") {
+		sep := "?"
+		if strings.Contains(path, "?") {
+			sep = "&"
+		}
+		return path + sep + "_pragma=foreign_keys(1)"
+	}
+	if path == ":memory:" {
+		return "file::memory:?_pragma=foreign_keys(1)"
+	}
+	u := url.URL{Scheme: "file", Path: path}
+	q := u.Query()
+	q.Add("_pragma", "foreign_keys(1)")
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 func (s *Store) Close() error {

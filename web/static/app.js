@@ -6,15 +6,20 @@ function createMiniswarApp() {
     messages: [],
     placementPreview: null,
     setupSidebarCollapsed: false,
+    newGameConfigOpen: false,
     loadGamesOpen: false,
     savedGames: [],
     savedGamesLoading: false,
+    armies: [],
+    armyDefaultsApplied: false,
     setup: {
       battlemapId: "old_road",
+      player1ArmyId: "",
+      player2ArmyId: "",
       player1: { base: "25x25", count: 12, units: [{ base: "25x25", count: 12 }] },
       player2: { base: "25x25", count: 10, units: [{ base: "25x25", count: 10 }] },
     },
-    move: { direction: "forward", distanceMm: 50 },
+    move: { direction: "forward", distanceMm: 100 },
     pivot: { facingDeg: 0 },
 
     isSetupPhase() {
@@ -25,6 +30,20 @@ function createMiniswarApp() {
       this.setupSidebarCollapsed = !this.setupSidebarCollapsed;
     },
 
+    async initGame() {
+      await this.loadArmies({ defaultSelections: true });
+      this.openNewGameConfig();
+    },
+
+    async openNewGameConfig() {
+      await this.loadArmies();
+      this.newGameConfigOpen = true;
+    },
+
+    closeNewGameConfig() {
+      if (this.game) this.newGameConfigOpen = false;
+    },
+
     setupPayload() {
       const parseBase = (value) => {
         const [baseWidthMm, baseDepthMm] = value.split("x").map((v) => Number(v));
@@ -32,8 +51,10 @@ function createMiniswarApp() {
       };
       return {
         battlemapId: this.setup.battlemapId,
-        player1Units: this.setup.player1.units.map((unit) => ({ ...parseBase(unit.base), count: unit.count })),
-        player2Units: this.setup.player2.units.map((unit) => ({ ...parseBase(unit.base), count: unit.count })),
+        player1ArmyId: this.setup.player1ArmyId,
+        player2ArmyId: this.setup.player2ArmyId,
+        player1Units: this.setup.player1ArmyId ? [] : this.setup.player1.units.map((unit) => ({ ...parseBase(unit.base), count: unit.count })),
+        player2Units: this.setup.player2ArmyId ? [] : this.setup.player2.units.map((unit) => ({ ...parseBase(unit.base), count: unit.count })),
       };
     },
 
@@ -48,14 +69,28 @@ function createMiniswarApp() {
     },
 
     async createGame() {
+      await this.loadArmies();
       const response = await this.api("/api/games", {
         method: "POST",
         body: JSON.stringify(this.setupPayload()),
       });
       if (response.ok) {
+        this.newGameConfigOpen = false;
         await this.setGame(response.game, { resetSelection: true });
       }
       this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    async loadArmies({ defaultSelections = false } = {}) {
+      const response = await this.api("/api/armies");
+      if (response.ok) {
+        this.armies = response.armies || [];
+        if (defaultSelections && !this.armyDefaultsApplied) {
+          if (!this.setup.player1ArmyId && this.armies[0]) this.setup.player1ArmyId = this.armies[0].id;
+          if (!this.setup.player2ArmyId && this.armies[1]) this.setup.player2ArmyId = this.armies[1].id;
+          this.armyDefaultsApplied = true;
+        }
+      }
     },
 
     async openLoadGames() {
@@ -144,6 +179,24 @@ function createMiniswarApp() {
       this.messages = [...(response.messages || []), ...(response.errors || [])];
     },
 
+    async resolveCombatChoice(combatChoice) {
+      const choice = this.pendingCombatChoice();
+      if (!choice) return;
+      const response = await this.api(`/api/games/${this.game.id}/actions`, {
+        method: "POST",
+        body: JSON.stringify({
+          playerId: choice.winningPlayerId,
+          unitId: choice.winningUnitId,
+          type: "combat_pushback",
+          combatChoice,
+        }),
+      });
+      if (response.ok) {
+        await this.setGame(response.game, { resetPivotAxis: true });
+      }
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
     async rewind(actionIndex) {
       const response = await this.api(`/api/games/${this.game.id}/rewind`, {
         method: "POST",
@@ -166,26 +219,30 @@ function createMiniswarApp() {
     },
 
     activePlayerUnit() {
-      return this.game?.units?.find((unit) => unit.playerId === this.game.activePlayer);
+      return this.game?.units?.find((unit) => unit.playerId === this.game.activePlayer && this.unitHasActiveMinis(unit));
+    },
+
+    unitHasActiveMinis(unit) {
+      return Boolean((unit?.minis || []).some((mini) => !mini.removed));
     },
 
     currentPlacementUnit() {
       if (!this.isSetupPhase()) return null;
-      const active = (this.game?.units || []).find((unit) => unit.playerId === this.game.activePlayer && !unit.placed);
+      const active = (this.game?.units || []).find((unit) => unit.playerId === this.game.activePlayer && !unit.placed && this.unitHasActiveMinis(unit));
       if (active) return active;
-      return (this.game?.units || []).find((unit) => !unit.placed) || null;
+      return (this.game?.units || []).find((unit) => !unit.placed && this.unitHasActiveMinis(unit)) || null;
     },
 
     selectedActivatableUnit() {
       const selected = this.game?.units?.find((unit) => unit.id === this.selectedUnit);
-      if (selected && selected.playerId === this.game.activePlayer && !this.unitActivatedThisRound(selected.id)) {
+      if (selected && selected.playerId === this.game.activePlayer && !selected.broken && this.unitHasActiveMinis(selected) && !this.unitActivatedThisRound(selected.id)) {
         return selected;
       }
       return this.activatableUnits()[0];
     },
 
     activatableUnits() {
-      return (this.game?.units || []).filter((unit) => unit.playerId === this.game.activePlayer && !this.unitActivatedThisRound(unit.id));
+      return (this.game?.units || []).filter((unit) => unit.playerId === this.game.activePlayer && !unit.broken && this.unitHasActiveMinis(unit) && !this.unitActivatedThisRound(unit.id));
     },
 
     unitActivatedThisRound(unitId) {
@@ -197,12 +254,104 @@ function createMiniswarApp() {
       return this.game?.units?.find((unit) => unit.id === id);
     },
 
+    selectedUnitObject() {
+      if (!this.selectedUnit) return null;
+      return this.game?.units?.find((unit) => unit.id === this.selectedUnit) || null;
+    },
+
+    detailUnit() {
+      return this.currentActivationUnit() || this.selectedUnitObject();
+    },
+
+    detailInstructions() {
+      if (!this.game) return "Start a new game to configure the battle.";
+      if (this.isSetupPhase()) return "Place units:";
+      return "Select a unit to inspect its stats.";
+    },
+
+    placementCounts() {
+      return [1, 2].map((playerId) => {
+        const units = (this.game?.units || []).filter((unit) => unit.playerId === playerId && this.unitHasActiveMinis(unit));
+        return {
+          playerId,
+          total: units.length,
+          remaining: units.filter((unit) => !unit.placed).length,
+        };
+      });
+    },
+
+    unitStatsEntries(unit) {
+      const stats = unit?.stats || {};
+      return [
+        ["A", stats.a || unit?.activationNumber || "-"],
+        ["M", stats.m || Math.round(this.movementLimitForUnit(unit) / 25) || "-"],
+        ["F", stats.f || "-"],
+        ["S", stats.s || "-"],
+        ["D", stats.d || "-"],
+        ["CD", stats.cd || "-"],
+        ["H", stats.h || unit?.maxHealth || "-"],
+      ].map(([label, value]) => ({ label, value }));
+    },
+
+    unitHealthLabel(unit) {
+      if (!unit) return "-";
+      const minis = unit.minis || [];
+      if (minis.length) {
+        const active = minis.filter((mini) => !mini.removed).length;
+        const perMiniMax = unit.maxHealth || unit.stats?.h || unit.currentHealth || 1;
+        const remainingHealth = minis.reduce((total, mini) => total + (mini.removed ? 0 : Math.max(0, mini.healthRemaining ?? perMiniMax)), 0);
+        const maxHealth = minis.length * perMiniMax;
+        if (perMiniMax > 1 || remainingHealth !== active) return `${remainingHealth}/${maxHealth} HP (${active}/${minis.length} minis)`;
+        return `${active}/${minis.length} minis`;
+      }
+      if (unit.currentHealth || unit.maxHealth) return `${unit.currentHealth || 0}/${unit.maxHealth || unit.currentHealth || 0}`;
+      return "-";
+    },
+
+    unitDetailStatus(unit) {
+      if (!unit) return "-";
+      const parts = [];
+      if (unit.broken) parts.push("broken");
+      if (unit.disordered) parts.push("disordered");
+      if (this.isEngagedUnit(unit.id)) parts.push("engaged");
+      if (this.game?.currentActivation?.unitId === unit.id) parts.push("active");
+      if (!unit.placed) parts.push("unplaced");
+      return parts.join(", ") || "ready";
+    },
+
+    unitDetailMeta(unit) {
+      if (!unit) return "";
+      const base = unit.base ? `${unit.base.widthMm}x${unit.base.depthMm}mm` : "unknown base";
+      return `${unit.id} · ${base} · activation ${unit.activationNumber}`;
+    },
+
+    movementLimitForUnit(unit) {
+      return unit?.movementLimitMm || ((unit?.stats?.m || 0) * 25) || 100;
+    },
+
+    resetMoveDistanceForUnit(unit) {
+      this.move.distanceMm = this.movementLimitForUnit(unit);
+    },
+
+    pendingCombatChoice() {
+      return this.game?.pendingCombatChoice || null;
+    },
+
+    combatChoiceLabel(choice) {
+      return {
+        pushback_25: "Push 25mm",
+        pushback_75: "Push 75mm",
+        withdraw_25: "Withdraw 25mm",
+        decline: "Decline",
+      }[choice] || choice;
+    },
+
     canActivate() {
-      return this.game && !this.game.currentActivation && Boolean(this.selectedActivatableUnit());
+      return this.game && !this.pendingCombatChoice() && !this.game.currentActivation && Boolean(this.selectedActivatableUnit());
     },
 
     canAct() {
-      return Boolean(this.game?.currentActivation);
+      return Boolean(this.game?.currentActivation && !this.pendingCombatChoice());
     },
 
     selectedUnitLabel() {
@@ -217,6 +366,14 @@ function createMiniswarApp() {
 
     async selectUnit(unit) {
       if (!this.game) return;
+      if (this.isSetupPhase()) {
+        if (unit.placed) {
+          this.selectedUnit = unit.id;
+          this.selectedMini = "";
+        }
+        await this.renderArenaSoon();
+        return;
+      }
       if (this.game.currentActivation) {
         if (this.game.currentActivation.unitId === unit.id) {
           this.selectedUnit = unit.id;
@@ -224,7 +381,7 @@ function createMiniswarApp() {
         await this.renderArenaSoon();
         return;
       }
-      if (unit.playerId === this.game.activePlayer && !this.unitActivatedThisRound(unit.id)) {
+      if (unit.playerId === this.game.activePlayer && !unit.broken && this.unitHasActiveMinis(unit) && !this.unitActivatedThisRound(unit.id)) {
         this.selectedUnit = unit.id;
         this.selectedMini = "";
       }
@@ -264,9 +421,16 @@ function createMiniswarApp() {
 
     statusLine() {
       if (!this.game) return "Loading";
+      if (this.game.phase === "complete") {
+        return this.game.winnerPlayerId ? `Game complete: player ${this.game.winnerPlayerId} wins` : "Game complete: draw";
+      }
       if (this.isSetupPhase()) {
         const unit = this.currentPlacementUnit();
         return unit ? `Setup: player ${unit.playerId} placing ${unit.name}` : "Setup";
+      }
+      const choice = this.pendingCombatChoice();
+      if (choice) {
+        return `Combat choice: player ${choice.winningPlayerId}, ${choice.winningUnitId}`;
       }
       const activation = this.game.currentActivation;
       if (activation) {
@@ -276,10 +440,15 @@ function createMiniswarApp() {
     },
 
     async setGame(game, options = {}) {
+      const previousActivationUnitId = this.game?.currentActivation?.unitId || "";
       this.game = game;
+      const activationUnit = this.currentActivationUnit();
+      if (activationUnit && activationUnit.id !== previousActivationUnitId) {
+        this.resetMoveDistanceForUnit(activationUnit);
+      }
       this.renderArena();
       if (this.isSetupPhase()) {
-        this.selectedUnit = this.currentPlacementUnit()?.id || "";
+        if (options.resetSelection) this.selectedUnit = "";
         this.selectedMini = "";
         await this.renderArenaSoon();
         return;
@@ -357,7 +526,14 @@ function createMiniswarApp() {
       if (!root) return;
       root.replaceChildren();
       const ns = "http://www.w3.org/2000/svg";
-      const units = (this.game?.units || []).filter((unit) => unit.placed);
+      const pendingChoice = this.pendingCombatChoice();
+      const engagedUnits = new Set();
+      for (const engagement of this.game?.engagements || []) {
+        if (!engagement.active) continue;
+        engagedUnits.add(engagement.attackerUnitId);
+        engagedUnits.add(engagement.defenderUnitId);
+      }
+      const units = (this.game?.units || []).filter((unit) => unit.placed && !unit.broken && this.unitHasActiveMinis(unit));
       if (this.isSetupPhase() && this.placementPreview) {
         const previewUnit = this.currentPlacementUnit();
         if (previewUnit) {
@@ -366,13 +542,23 @@ function createMiniswarApp() {
       }
       for (const unit of units) {
         const isActiveUnit = this.game?.currentActivation?.unitId === unit.id;
-        const isSelectedForActivation = !this.game?.currentActivation && unit.id === this.selectedUnit && unit.playerId === this.game.activePlayer && !this.unitActivatedThisRound(unit.id);
+        const isSelectedUnit = unit.id === this.selectedUnit;
+        const isSelectedForActivation = !this.game?.currentActivation && isSelectedUnit && unit.playerId === this.game.activePlayer && !this.unitActivatedThisRound(unit.id);
         const pivotAxis = isActiveUnit ? this.pivotAxisKey() : "";
+        const isEngaged = engagedUnits.has(unit.id);
+        const isWinner = pendingChoice?.winningUnitId === unit.id;
+        const isLoser = pendingChoice?.losingUnitId === unit.id;
+        const unitClasses = ["unit"];
+        if (unit.preview) unitClasses.push("placement-preview");
+        if (isEngaged) unitClasses.push("engaged");
+        if (unit.disordered) unitClasses.push("disordered");
+        if (isWinner) unitClasses.push("pending-winner");
+        if (isLoser) unitClasses.push("pending-loser");
         const group = document.createElementNS(ns, "g");
         group.setAttribute("transform", `translate(${unit.x} ${unit.y}) rotate(${unit.facingDeg})`);
         group.setAttribute("data-unit", unit.id);
+        group.setAttribute("class", unitClasses.join(" "));
         if (unit.preview) {
-          group.setAttribute("class", "placement-preview");
           group.setAttribute("pointer-events", "none");
         }
         group.addEventListener("click", () => {
@@ -381,6 +567,7 @@ function createMiniswarApp() {
         });
 
         for (const mini of unit.minis) {
+          if (mini.removed) continue;
           const miniGroup = document.createElementNS(ns, "g");
           miniGroup.setAttribute("transform", `translate(${mini.relX} ${mini.relY})`);
           miniGroup.addEventListener("click", (event) => {
@@ -394,7 +581,7 @@ function createMiniswarApp() {
           rect.setAttribute("height", mini.depthMm);
           rect.setAttribute(
             "class",
-            `mini p${unit.playerId}${isActiveUnit || isSelectedForActivation ? " active" : ""}${isSelectedForActivation ? " selected-unit" : ""}${isActiveUnit && mini.key === pivotAxis ? " pivot-axis" : ""}`,
+            `mini p${unit.playerId}${isActiveUnit || isSelectedForActivation ? " active" : ""}${isSelectedUnit ? " selected-unit" : ""}${isActiveUnit && mini.key === pivotAxis ? " pivot-axis" : ""}`,
           );
           miniGroup.appendChild(rect);
 
@@ -407,8 +594,45 @@ function createMiniswarApp() {
           miniGroup.appendChild(text);
           group.appendChild(miniGroup);
         }
+        const status = this.unitStatusText(unit, { isEngaged, isWinner, isLoser });
+        if (status) {
+          const bounds = this.localUnitBounds(unit);
+          const badge = document.createElementNS(ns, "text");
+          badge.setAttribute("x", bounds.minX);
+          badge.setAttribute("y", bounds.minY - 6);
+          badge.setAttribute("class", "unit-status-text");
+          badge.textContent = status;
+          group.appendChild(badge);
+        }
         root.appendChild(group);
       }
+    },
+
+    isEngagedUnit(unitId) {
+      return Boolean((this.game?.engagements || []).some((engagement) => engagement.active && (engagement.attackerUnitId === unitId || engagement.defenderUnitId === unitId)));
+    },
+
+    unitStatusText(unit, state = {}) {
+      const parts = [];
+      if (state.isEngaged ?? this.isEngagedUnit(unit.id)) parts.push("engaged");
+      if (unit.disordered) parts.push("disordered");
+      if (state.isWinner ?? this.pendingCombatChoice()?.winningUnitId === unit.id) parts.push("winner");
+      if (state.isLoser ?? this.pendingCombatChoice()?.losingUnitId === unit.id) parts.push("pushed");
+      return parts.join(" / ");
+    },
+
+    localUnitBounds(unit) {
+      const activeMinis = (unit.minis || []).filter((mini) => !mini.removed);
+      if (activeMinis.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+      return activeMinis.reduce(
+        (bounds, mini) => ({
+          minX: Math.min(bounds.minX, mini.relX),
+          minY: Math.min(bounds.minY, mini.relY),
+          maxX: Math.max(bounds.maxX, mini.relX + mini.widthMm),
+          maxY: Math.max(bounds.maxY, mini.relY + mini.depthMm),
+        }),
+        { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
+      );
     },
 
     renderTerrain() {
@@ -438,7 +662,220 @@ function createMiniswarApp() {
   };
 }
 
+function createArmiesManager() {
+  return {
+    mode: "template",
+    selectedId: "",
+    selected: null,
+    templates: [],
+    armies: [],
+    catalogUnits: [],
+    filterOptions: { nations: [], terrains: [] },
+    filters: { nation: "", terrain: "" },
+    messages: [],
+
+    async initArmies() {
+      await Promise.all([this.loadFilters(), this.loadCatalog(), this.loadTemplates(), this.loadArmies()]);
+      const template = this.templateFromURL();
+      if (template) await this.selectTemplate(template.id);
+      else if (this.templates[0]) await this.selectTemplate(this.templates[0].id);
+      else if (this.armies[0]) await this.selectArmy(this.armies[0].id);
+    },
+
+    async api(path, options = {}) {
+      const response = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+      return await response.json();
+    },
+
+    async loadFilters() {
+      const response = await this.api("/api/catalog/filters");
+      if (response.ok) this.filterOptions = response.filters;
+    },
+
+    async loadCatalog() {
+      const params = new URLSearchParams();
+      if (this.filters.nation) params.set("nation", this.filters.nation);
+      if (this.filters.terrain) params.set("terrain", this.filters.terrain);
+      const response = await this.api(`/api/catalog/units?${params.toString()}`);
+      if (response.ok) this.catalogUnits = response.units || [];
+    },
+
+    async loadTemplates() {
+      const response = await this.api("/api/army-templates");
+      if (response.ok) this.templates = response.templates || [];
+    },
+
+    async loadArmies() {
+      const response = await this.api("/api/armies");
+      if (response.ok) this.armies = response.armies || [];
+    },
+
+    async createTemplate() {
+      const response = await this.api("/api/army-templates", { method: "POST", body: JSON.stringify({ name: "New Template", targetPoints: 1000 }) });
+      await this.loadTemplates();
+      if (response.ok) await this.selectTemplate(response.template.id);
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    async createArmy() {
+      const response = await this.api("/api/armies", { method: "POST", body: JSON.stringify({ name: "New Army", targetPoints: 1000 }) });
+      await this.loadArmies();
+      if (response.ok) await this.selectArmy(response.army.id);
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    async createArmyFromSelected() {
+      if (!this.selected || this.mode !== "template") return;
+      const response = await this.api("/api/armies/from-template", {
+        method: "POST",
+        body: JSON.stringify({ templateId: this.selected.id, name: this.selected.name }),
+      });
+      await this.loadArmies();
+      if (response.ok) await this.selectArmy(response.army.id);
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    async selectTemplate(id) {
+      const response = await this.api(`/api/army-templates/${id}`);
+      if (response.ok) {
+        this.mode = "template";
+        this.selectedId = id;
+        this.selected = response.template;
+        this.updateTemplateURL(this.selected.name);
+      }
+    },
+
+    async selectArmy(id) {
+      const response = await this.api(`/api/armies/${id}`);
+      if (response.ok) {
+        this.mode = "army";
+        this.selectedId = id;
+        this.selected = response.army;
+        this.clearTemplateURL();
+      }
+    },
+
+    async saveSelectedMeta() {
+      if (!this.selected) return;
+      this.syncSelectedListSummary();
+      const path = this.mode === "template" ? `/api/army-templates/${this.selected.id}` : `/api/armies/${this.selected.id}`;
+      const response = await this.api(path, {
+        method: "PATCH",
+        body: JSON.stringify({ name: this.selected.name, targetPoints: this.selected.targetPoints }),
+      });
+      if (response.ok) this.selected = this.mode === "template" ? response.template : response.army;
+      this.syncSelectedListSummary();
+      if (this.mode === "template") this.updateTemplateURL(this.selected.name);
+      await Promise.all([this.loadTemplates(), this.loadArmies()]);
+    },
+
+    async addUnit(unit) {
+      if (!this.selected) {
+        await this.createTemplate();
+      }
+      const path = this.mode === "template" ? `/api/army-templates/${this.selected.id}/units` : `/api/armies/${this.selected.id}/units`;
+      const response = await this.api(path, {
+        method: "POST",
+        body: JSON.stringify({ catalogUnitId: unit.id, moniker: unit.unitName }),
+      });
+      if (response.ok) this.selected = this.mode === "template" ? response.template : response.army;
+      if (this.mode === "template") this.updateTemplateURL(this.selected.name);
+      await Promise.all([this.loadTemplates(), this.loadArmies()]);
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    async saveLine(line) {
+      this.syncSelectedListSummary();
+      const path =
+        this.mode === "template"
+          ? `/api/army-templates/${this.selected.id}/units/${line.id}`
+          : `/api/armies/${this.selected.id}/units/${line.id}`;
+      const response = await this.api(path, {
+        method: "PATCH",
+        body: JSON.stringify({
+          moniker: this.mode === "template" ? line.defaultMoniker : line.moniker,
+          miniCount: line.miniCount,
+          currentHealth: line.currentHealth,
+        }),
+      });
+      if (response.ok) this.selected = this.mode === "template" ? response.template : response.army;
+      this.syncSelectedListSummary();
+      if (this.mode === "template") this.updateTemplateURL(this.selected.name);
+      await Promise.all([this.loadTemplates(), this.loadArmies()]);
+    },
+
+    syncSelectedListSummary() {
+      if (!this.selected) return;
+      const list = this.mode === "template" ? this.templates : this.armies;
+      const item = list.find((entry) => entry.id === this.selected.id);
+      if (!item) return;
+      item.name = this.selected.name;
+      item.targetPoints = this.selected.targetPoints;
+      item.totalPoints = this.entityPoints(this.selected);
+    },
+
+    templateFromURL() {
+      const name = new URLSearchParams(window.location.search).get("template");
+      if (!name) return null;
+      const normalized = name.trim().toLocaleLowerCase();
+      return this.templates.find((template) => template.name.trim().toLocaleLowerCase() === normalized) || null;
+    },
+
+    updateTemplateURL(name) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("template", name);
+      window.history.replaceState({}, "", url);
+    },
+
+    clearTemplateURL() {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("template");
+      window.history.replaceState({}, "", url);
+    },
+
+    async removeLine(line) {
+      const path =
+        this.mode === "template"
+          ? `/api/army-templates/${this.selected.id}/units/${line.id}`
+          : `/api/armies/${this.selected.id}/units/${line.id}`;
+      const response = await this.api(path, { method: "DELETE" });
+      if (response.ok) this.selected = this.mode === "template" ? response.template : response.army;
+      if (this.mode === "template") this.updateTemplateURL(this.selected.name);
+      await Promise.all([this.loadTemplates(), this.loadArmies()]);
+    },
+
+    pointsLine() {
+      if (!this.selected) return "";
+      const target = this.selected.targetPoints || 0;
+      const total = this.entityPoints(this.selected);
+      return total === target ? `${total}/${target} points` : `${total}/${target} points - total differs from target`;
+    },
+
+    linePoints(line) {
+      return (line.catalogUnit?.pts || 0) * (line.miniCount || 0);
+    },
+
+    entityPoints(entity, kind = "") {
+      if (!entity) return 0;
+      if (entity.units) {
+        return entity.units.reduce((total, line) => total + this.linePoints(line), 0);
+      }
+      if (this.selected && entity !== this.selected && entity.id === this.selected.id && (!kind || this.mode === kind)) {
+        return this.entityPoints(this.selected);
+      }
+      return entity.totalPoints || 0;
+    },
+
+    statusLine() {
+      if (!this.selected) return "Create a template or roster to begin.";
+      return `${this.selected.name}: ${this.pointsLine()}`;
+    },
+  };
+}
+
 window.miniswar = createMiniswarApp;
+window.armiesManager = createArmiesManager;
 document.addEventListener("alpine:init", () => {
   window.Alpine.data("miniswar", createMiniswarApp);
+  window.Alpine.data("armiesManager", createArmiesManager);
 });

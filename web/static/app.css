@@ -39,6 +39,16 @@ button {
   cursor: pointer;
 }
 
+.button-link {
+  display: inline-block;
+  border: 1px solid #1f3f43;
+  background: var(--accent);
+  color: white;
+  padding: 0.55rem 0.8rem;
+  border-radius: 6px;
+  text-decoration: none;
+}
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
@@ -158,24 +168,79 @@ h3 {
   right: -1.2rem;
 }
 
-.setup-disclosure {
+.details-panel,
+.unit-detail,
+.detail-empty {
   display: grid;
   gap: 0.75rem;
 }
 
-.setup-disclosure summary {
-  cursor: pointer;
+.details-panel h2 {
+  margin-bottom: 0;
+}
+
+.detail-empty p,
+.unit-detail-meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.placement-counts {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.placement-counts li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.55rem;
+  align-items: baseline;
+  color: var(--muted);
+}
+
+.placement-counts li span:first-child {
+  min-width: 3.4rem;
   color: var(--ink);
   font-weight: 700;
-  margin-bottom: 0.8rem;
 }
 
-.setup-disclosure[open] summary {
-  margin-bottom: 0.9rem;
+.unit-detail {
+  padding-top: 0.1rem;
 }
 
-.setup-disclosure > label {
-  margin-bottom: 0.8rem;
+.unit-detail-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.65rem;
+  align-items: baseline;
+}
+
+.unit-detail-head span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.unit-detail-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.unit-detail-list div {
+  display: grid;
+  grid-template-columns: 4rem 1fr;
+  gap: 0.5rem;
+}
+
+.unit-detail-list dt {
+  color: var(--muted);
+}
+
+.unit-detail-list dd {
+  margin: 0;
 }
 
 .setup-grid,
@@ -198,13 +263,21 @@ h3 {
 
 .setup-units li {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) 5rem auto;
   align-items: center;
   gap: 0.35rem;
   margin-bottom: 0.35rem;
 }
 
-.setup-units button {
+.setup-unit-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5rem auto;
+  align-items: end;
+  gap: 0.35rem;
+}
+
+.setup-units button,
+.setup-unit-add button {
   padding: 0.25rem 0.4rem;
   background: #fffdf8;
   color: var(--ink);
@@ -274,6 +347,12 @@ label {
   stroke: rgba(37, 35, 32, 0.9);
 }
 
+.terrain.passable_obstacle {
+  fill: rgba(166, 154, 126, 0.42);
+  stroke: rgba(96, 83, 58, 0.8);
+  stroke-dasharray: 6 4;
+}
+
 .terrain-label {
   fill: rgba(34, 33, 29, 0.62);
   font-size: 13px;
@@ -316,6 +395,33 @@ label {
   stroke-width: 5;
 }
 
+.unit.engaged .mini {
+  filter: drop-shadow(0 0 4px rgba(15, 111, 120, 0.55));
+}
+
+.unit.disordered .mini {
+  stroke-dasharray: 6 3;
+}
+
+.unit.pending-winner .mini {
+  fill: rgba(15, 111, 120, 0.2);
+}
+
+.unit.pending-loser .mini {
+  fill: rgba(163, 63, 54, 0.16);
+}
+
+.unit-status-text {
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: #fffdf8;
+  stroke-width: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+  text-transform: uppercase;
+}
+
 .placement-preview {
   opacity: 0.68;
   pointer-events: none;
@@ -343,6 +449,31 @@ label {
   margin: -0.25rem 0 0.75rem;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.combat-choice {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border-left: 3px solid var(--accent);
+  background: rgba(255, 253, 248, 0.66);
+}
+
+.combat-choice p {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.choice-grid button {
+  min-height: 2.35rem;
+  padding: 0.45rem 0.55rem;
 }
 
 .messages,
@@ -406,6 +537,22 @@ label {
   border-color: var(--line);
 }
 
+.setup-modal {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.setup-modal .setup-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+}
+
 .modal-status {
   margin: 0.75rem 0;
   color: var(--muted);
@@ -439,13 +586,180 @@ label {
   padding: 0.35rem 0.55rem;
 }
 
+.armies-shell {
+  display: grid;
+  grid-template-columns: 240px minmax(420px, 1fr) 360px;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.army-sidebar,
+.catalog-panel,
+.roster-panel {
+  min-width: 0;
+}
+
+.army-list {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.army-list button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.15rem;
+  text-align: left;
+  background: #fffdf8;
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.army-list button.selected {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.army-list small,
+.statblock p,
+.roster-units small {
+  color: var(--muted);
+}
+
+.catalog-toolbar,
+.roster-header {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.statblock-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+
+.statblock {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffdf8;
+}
+
+.statblock-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.statblock-head h2 {
+  margin: 0 0 0.15rem;
+}
+
+.statblock-head button {
+  padding: 0.35rem 0.55rem;
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.25rem;
+  margin: 0;
+}
+
+.stats-row.compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.stats-row div {
+  padding: 0.35rem 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.stats-row dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.stats-row dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.tag-line {
+  font-size: 0.86rem;
+  line-height: 1.3;
+}
+
+.points-warning {
+  margin: 0 0 0.75rem;
+  color: var(--red);
+}
+
+.points-warning.off {
+  color: var(--muted);
+}
+
+.roster-units {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.roster-units li {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffdf8;
+}
+
+.roster-units button {
+  justify-self: start;
+  padding: 0.35rem 0.55rem;
+  background: #fffdf8;
+  color: var(--ink);
+  border-color: var(--line);
+}
+
 @media (max-width: 980px) {
   .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .armies-shell {
     grid-template-columns: 1fr;
   }
 
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .setup-modal .setup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-units li,
+  .setup-unit-add {
+    grid-template-columns: minmax(0, 1fr) minmax(4rem, 0.5fr);
+  }
+
+  .setup-units button,
+  .setup-unit-add button {
+    grid-column: 1 / -1;
   }
 }

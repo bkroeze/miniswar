@@ -1,61 +1,97 @@
-# Phase 1 Miniswar App
+# Miniswar App
 
 ## Summary
 
-Build the first playable scaffold from `IDEA.md` and `RULES.md`: a Go web app with SQLite-backed game state, JSON APIs for all game actions, and an SVG arena UI driven by Alpine.js. Phase 1 supports setup, two players, one unit per player, activation rolls, alternating activations, movement-oriented actions, action history, and rewind.
+Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game actions, army and roster management, and an SVG arena UI driven by Alpine.js. The current app supports catalog-backed armies, templates, multi-unit setup, activation rolls, alternating activations, movement actions, move-into-combat resolution, morale, pushback choices, action history, and rewind.
 
 ## Key Changes
 
-- Initialize a Go module with a small layered structure:
-  - `cmd/miniswar` starts the HTTP server.
-  - `internal/game` owns rules, state transitions, layouts, activation, movement, and rewind snapshots.
-  - `internal/store` persists games, turns, units, minis, actions, and snapshots in SQLite.
-  - `web` serves HTML, CSS, Alpine.js, and SVG rendering.
-- Use Go stdlib templates plus Alpine.js for the browser UI. No React, no canvas.
-- Render the arena entirely in SVG using millimeter coordinates. Minis are rectangles sized by base dimensions, with unit/player color, facing indicator, mini key, and officer marking.
-- Implement setup controls for unit sizes and base sizes, constrained by `RULES.md`.
-- Create deterministic unit layout logic with stable mini keys like `p1-u1-m01`; officer defaults to one of the two center positions in the front rank.
+- `cmd/miniswar` starts the HTTP server with `-addr` and `-db` flags.
+- `internal/game` owns rules, state transitions, layouts, activation, movement, combat, morale, legal actions, and rewind snapshots.
+- `internal/store` persists games, snapshots, the imported unit catalog, army templates, and army rosters in SQLite.
+- `web` serves HTML, CSS, Alpine.js, and SVG rendering.
+- The store imports `data/units.json` into `catalog_units` and `catalog_unit_terrains` when it opens.
+- The arena is rendered entirely in SVG using millimeter coordinates. Minis are rectangles sized by base dimensions, with unit/player color, facing indicator, mini key, officer marking, status styling, and engagement styling.
+- Setup can use saved army rosters for either player, or fall back to manual units when no roster is selected.
+- Unit layout uses stable mini keys like `p1-u1-m01`; the officer defaults to one of the center positions in the front rank.
 
 ## Public Interfaces
 
 - Browser routes:
-  - `GET /` renders the app shell.
-  - `GET /static/*` serves CSS and JavaScript.
-- JSON API:
-  - `POST /api/games` creates a game from setup options and returns full state.
+  - `GET /` renders the game shell.
+  - `GET /armies` renders the army template and roster manager.
+  - `GET /static/*` serves CSS, JavaScript, and Alpine.js.
+- Catalog API:
+  - `GET /api/catalog/units?nation=&terrain=` returns catalog units, optionally filtered by exact nation and terrain.
+  - `GET /api/catalog/filters` returns available `nations` and `terrains`.
+- Army template API:
+  - `GET /api/army-templates` lists templates.
+  - `POST /api/army-templates` creates a template from `{ "name": string, "targetPoints": number }`.
+  - `GET /api/army-templates/{id}` returns a template with units.
+  - `PATCH /api/army-templates/{id}` updates template name and target points.
+  - `POST /api/army-templates/{id}/units` adds a catalog unit from `{ "catalogUnitId": string, "moniker": string, "miniCount": number }`.
+  - `PATCH /api/army-templates/{id}/units/{unitID}` updates default moniker and mini count.
+  - `DELETE /api/army-templates/{id}/units/{unitID}` removes a template unit.
+- Army roster API:
+  - `GET /api/armies` lists rosters.
+  - `POST /api/armies` creates a roster from `{ "name": string, "targetPoints": number }`.
+  - `POST /api/armies/from-template` creates a roster from `{ "templateId": string, "name": string }`.
+  - `GET /api/armies/{id}` returns a roster with units.
+  - `PATCH /api/armies/{id}` updates roster name and target points.
+  - `POST /api/armies/{id}/units` adds a catalog unit from `{ "catalogUnitId": string, "moniker": string, "miniCount": number }`.
+  - `PATCH /api/armies/{id}/units/{unitID}` updates moniker, mini count, and current health.
+  - `DELETE /api/armies/{id}/units/{unitID}` removes a roster unit.
+- Game API:
+  - `POST /api/games` creates a game. The request can provide `player1Units` and `player2Units`, legacy `player1` and `player2`, or `player1ArmyId` and `player2ArmyId` to load roster units. Manual units use `baseWidthMm`, `baseDepthMm`, `count`, optional `name`, optional catalog/army identity fields, optional `stats`, and optional health fields.
+  - `GET /api/games` lists saved games.
   - `GET /api/games/{id}` returns full game state.
-  - `POST /api/games/{id}/activate` activates a unit, rolls `2d10`, records success/failure, and returns available actions.
-  - `POST /api/games/{id}/actions` applies `move`, `pivot`, or `about_face`.
-  - `POST /api/games/{id}/rewind` rewinds to a prior action index or snapshot id and returns full state.
+  - `POST /api/games/{id}/placements` places the next setup unit from `{ "playerId": number, "unitId": string, "x": number, "y": number, "facingDeg": number }`.
+  - `POST /api/games/{id}/activate` activates a unit from `{ "playerId": number, "unitId": string }`, rolls `2d10`, records success/failure, may resolve engagement combat, and returns available actions.
+  - `POST /api/games/{id}/actions` applies `move`, `pivot`, `about_face`, `skip`, or `combat_pushback` from an action request with `playerId`, `unitId`, `type`, and type-specific fields such as `direction`, `distanceMm`, `facingDeg`, `anchorKey`, or `combatChoice`.
   - `GET /api/games/{id}/actions` returns action history with machine-readable results.
-- Every action response includes `ok`, `game`, `action`, `roll`, `legalActions`, `messages`, and `errors`.
-- Do not implement shooting, combat resolution, damage, scenery interaction, sockets, or multiplayer auth in phase 1.
+  - `POST /api/games/{id}/rewind` rewinds to `{ "actionIndex": number }` and deletes later snapshots.
+- Game mutation responses use `APIResponse` where practical: `ok`, `game`, `action`, `roll`, `legalActions`, `messages`, and `errors`.
+- Army and catalog responses use the same `ok`, domain object, and `messages` pattern.
+- `battlemapId` defaults to `old_road`; the current choices are `old_road` and `forest_wall`, and unknown IDs are rejected.
+- Adding template or roster units with `miniCount` omitted or `0` uses one full rank for that base size, and counts above the base maximum are clamped. Roster `currentHealth` is clamped between `0` and the unit's max health.
 
 ## Game Behavior
 
-- On round 1, randomly choose the first player and record the seed/roll metadata.
-- Players alternate activations. Each unit activates once per round, then a new round begins.
+- On round 1, randomly choose the first player and record the seed and opening initiative.
+- Players alternate activations. Each unbroken unit activates once per round, then a new round begins.
 - Activation roll: roll two ten-sided dice. If either die is greater than or equal to the unit activation number, activation succeeds.
 - Player 1 unit activation number is `5`; player 2 unit activation number is `4`.
+- Disordered units activate at activation number +1. If a disordered unit succeeds, disorder clears and that activation is limited to one simple action.
 - Successful activation grants two actions. Failed activation grants one simple action.
-- Phase 1 actions:
+- Legal active actions are:
   - `move`: straight forward up to movement limit, backward up to half. A second move in the same activation has half movement.
   - `pivot`: rotate unit around the officer by default, or around a selected mini key anchor when supplied.
   - `about_face`: reverse facing and reorganize ranks according to the base layout rules.
-- Use a conservative default movement limit of `100mm` unless a later rule document specifies otherwise.
-- Store pre-action snapshots so rewind works during active or completed games.
+  - `skip`: end the activation.
+- A unit with an `M` stat moves `M * 25mm`; units without stats use `100mm`.
+- Rough terrain doubles movement cost only for the overlapping portion of a move. Impassable terrain blocks placement, movement, pivot, about-face, combat alignment, and pushback/withdraw movement. Path terrain is currently visual only.
+- Units may pass through friendly units only if the move fully clears them; otherwise movement backs up to the last clear position. Enemy contact during forward or backward movement triggers combat.
+- Moving into an enemy creates an engagement, snaps the attacker flush to the defender face when possible, and resolves a combat round.
+- Activating a unit already engaged with an enemy also resolves combat before ordinary actions continue.
+- Combat records dice counts, target numbers, modifiers, rolls, hits, casualties, morale tests, broken units, winners, and pending pushback choices.
+- While a pending combat choice exists, legal actions are limited to `combat_pushback` with one of `pushback_25`, `pushback_75`, `withdraw_25`, or `decline`.
+- Passable-obstacle terrain does not block movement, but it marks a defender as fortified when the attacker crosses or contacts it while moving into combat.
+- Roster health is copied into each mini when a game starts. Units with zero current health start removed, are skipped during placement and activation, and can immediately determine a win or draw after setup.
+- When only one player has units left on the battlefield, that player wins and the game phase becomes `complete`. If no player has active units left, the game completes as a draw.
+- Store pre-action snapshots so rewind works during active, pending-combat, and completed games.
 
 ## Test Plan
 
-- Unit tests for base-size validation, max unit size, rank layout, officer placement, and mini key stability.
-- Unit tests for activation success/failure with injectable RNG.
-- Unit tests for action legality: turn ownership, remaining actions, second-move distance reduction, and failed-activation simple action limit.
-- Unit tests for rewind restoring game state and action history position.
-- HTTP tests for create game, get game, activate, apply action, list actions, and rewind.
-- Manual browser check: create a game with different unit sizes, activate each side, move/pivot/about-face, verify SVG updates and action feedback.
+- Unit tests for base-size validation, max unit size, rank layout, officer placement, mini key stability, and catalog-derived movement/health.
+- Unit tests for activation success/failure, disordered activation, legal action gating, movement limits, and failed-activation simple action limits.
+- Unit tests for combat alignment, dice, target numbers, hit allocation, officer-safe casualties, morale, broken cascades, pushback/withdraw/decline, and win completion.
+- Store tests for catalog import, filters, template CRUD, roster CRUD, and army-to-game setup conversion.
+- HTTP tests for catalog endpoints, army endpoints, create game, place units, activate, apply actions, combat pushback, list actions, persistence, and rewind.
+- Manual browser check: manage templates/rosters, create a game from rosters, place units, activate, move/pivot/about-face/skip, enter combat, resolve pushback, rewind, and verify SVG updates and action feedback.
 
 ## Assumptions
 
 - Use Go 1.26.2 already available in the environment.
 - Use `modernc.org/sqlite` to avoid CGO requirements.
-- Use Alpine.js for the phase 1 UI, with the app still fully operable through JSON APIs.
+- Use Alpine.js for the UI, with the app still fully operable through JSON APIs.
+- Shooting, wheel movement, multiplayer sockets, authentication, and special ability execution remain deferred.

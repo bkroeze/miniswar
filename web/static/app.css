@@ -263,13 +263,21 @@ h3 {
 
 .setup-units li {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) 5rem auto;
   align-items: center;
   gap: 0.35rem;
   margin-bottom: 0.35rem;
 }
 
-.setup-units button {
+.setup-unit-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5rem auto;
+  align-items: end;
+  gap: 0.35rem;
+}
+
+.setup-units button,
+.setup-unit-add button {
   padding: 0.25rem 0.4rem;
   background: #fffdf8;
   color: var(--ink);
@@ -739,5 +747,19 @@ label {
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .setup-modal .setup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-units li,
+  .setup-unit-add {
+    grid-template-columns: minmax(0, 1fr) minmax(4rem, 0.5fr);
+  }
+
+  .setup-units button,
+  .setup-unit-add button {
+    grid-column: 1 / -1;
   }
 }

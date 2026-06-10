@@ -219,26 +219,30 @@ function createMiniswarApp() {
     },
 
     activePlayerUnit() {
-      return this.game?.units?.find((unit) => unit.playerId === this.game.activePlayer);
+      return this.game?.units?.find((unit) => unit.playerId === this.game.activePlayer && this.unitHasActiveMinis(unit));
+    },
+
+    unitHasActiveMinis(unit) {
+      return Boolean((unit?.minis || []).some((mini) => !mini.removed));
     },
 
     currentPlacementUnit() {
       if (!this.isSetupPhase()) return null;
-      const active = (this.game?.units || []).find((unit) => unit.playerId === this.game.activePlayer && !unit.placed);
+      const active = (this.game?.units || []).find((unit) => unit.playerId === this.game.activePlayer && !unit.placed && this.unitHasActiveMinis(unit));
       if (active) return active;
-      return (this.game?.units || []).find((unit) => !unit.placed) || null;
+      return (this.game?.units || []).find((unit) => !unit.placed && this.unitHasActiveMinis(unit)) || null;
     },
 
     selectedActivatableUnit() {
       const selected = this.game?.units?.find((unit) => unit.id === this.selectedUnit);
-      if (selected && selected.playerId === this.game.activePlayer && !selected.broken && !this.unitActivatedThisRound(selected.id)) {
+      if (selected && selected.playerId === this.game.activePlayer && !selected.broken && this.unitHasActiveMinis(selected) && !this.unitActivatedThisRound(selected.id)) {
         return selected;
       }
       return this.activatableUnits()[0];
     },
 
     activatableUnits() {
-      return (this.game?.units || []).filter((unit) => unit.playerId === this.game.activePlayer && !unit.broken && !this.unitActivatedThisRound(unit.id));
+      return (this.game?.units || []).filter((unit) => unit.playerId === this.game.activePlayer && !unit.broken && this.unitHasActiveMinis(unit) && !this.unitActivatedThisRound(unit.id));
     },
 
     unitActivatedThisRound(unitId) {
@@ -267,7 +271,7 @@ function createMiniswarApp() {
 
     placementCounts() {
       return [1, 2].map((playerId) => {
-        const units = (this.game?.units || []).filter((unit) => unit.playerId === playerId);
+        const units = (this.game?.units || []).filter((unit) => unit.playerId === playerId && this.unitHasActiveMinis(unit));
         return {
           playerId,
           total: units.length,
@@ -377,7 +381,7 @@ function createMiniswarApp() {
         await this.renderArenaSoon();
         return;
       }
-      if (unit.playerId === this.game.activePlayer && !unit.broken && !this.unitActivatedThisRound(unit.id)) {
+      if (unit.playerId === this.game.activePlayer && !unit.broken && this.unitHasActiveMinis(unit) && !this.unitActivatedThisRound(unit.id)) {
         this.selectedUnit = unit.id;
         this.selectedMini = "";
       }
@@ -417,7 +421,9 @@ function createMiniswarApp() {
 
     statusLine() {
       if (!this.game) return "Loading";
-      if (this.game.phase === "complete") return `Game complete: player ${this.game.winnerPlayerId} wins`;
+      if (this.game.phase === "complete") {
+        return this.game.winnerPlayerId ? `Game complete: player ${this.game.winnerPlayerId} wins` : "Game complete: draw";
+      }
       if (this.isSetupPhase()) {
         const unit = this.currentPlacementUnit();
         return unit ? `Setup: player ${unit.playerId} placing ${unit.name}` : "Setup";
@@ -527,7 +533,7 @@ function createMiniswarApp() {
         engagedUnits.add(engagement.attackerUnitId);
         engagedUnits.add(engagement.defenderUnitId);
       }
-      const units = (this.game?.units || []).filter((unit) => unit.placed && !unit.broken);
+      const units = (this.game?.units || []).filter((unit) => unit.placed && !unit.broken && this.unitHasActiveMinis(unit));
       if (this.isSetupPhase() && this.placementPreview) {
         const previewUnit = this.currentPlacementUnit();
         if (previewUnit) {

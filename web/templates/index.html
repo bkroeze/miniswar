@@ -178,11 +178,37 @@
           <ol class="setup-units" x-show="!setup.player1ArmyId">
             <template x-for="(unit, index) in setup.player1.units" :key="`p1-${index}`">
               <li>
-                <span x-text="`${unit.count} minis on ${unit.base}`"></span>
+                <label>Base
+                  <select x-model="unit.base">
+                    <option value="25x25">25x25</option>
+                    <option value="25x50">25x50</option>
+                    <option value="50x50">50x50</option>
+                    <option value="50x100">50x100</option>
+                    <option value="100x50">100x50</option>
+                  </select>
+                </label>
+                <label>Minis
+                  <input type="number" min="1" max="20" x-model.number="unit.count">
+                </label>
                 <button type="button" @click="removeSetupUnit(1, index)" :disabled="setup.player1.units.length === 1">remove</button>
               </li>
             </template>
           </ol>
+          <div class="setup-unit-add" x-show="!setup.player1ArmyId">
+            <label>Base
+              <select x-model="setup.player1.base">
+                <option value="25x25">25x25</option>
+                <option value="25x50">25x50</option>
+                <option value="50x50">50x50</option>
+                <option value="50x100">50x100</option>
+                <option value="100x50">100x50</option>
+              </select>
+            </label>
+            <label>Minis
+              <input type="number" min="1" max="20" x-model.number="setup.player1.count">
+            </label>
+            <button type="button" @click="addSetupUnit(1)">Add unit</button>
+          </div>
         </div>
         <div class="setup-player">
           <h3>Player 2</h3>
@@ -197,11 +223,37 @@
           <ol class="setup-units" x-show="!setup.player2ArmyId">
             <template x-for="(unit, index) in setup.player2.units" :key="`p2-${index}`">
               <li>
-                <span x-text="`${unit.count} minis on ${unit.base}`"></span>
+                <label>Base
+                  <select x-model="unit.base">
+                    <option value="25x25">25x25</option>
+                    <option value="25x50">25x50</option>
+                    <option value="50x50">50x50</option>
+                    <option value="50x100">50x100</option>
+                    <option value="100x50">100x50</option>
+                  </select>
+                </label>
+                <label>Minis
+                  <input type="number" min="1" max="20" x-model.number="unit.count">
+                </label>
                 <button type="button" @click="removeSetupUnit(2, index)" :disabled="setup.player2.units.length === 1">remove</button>
               </li>
             </template>
           </ol>
+          <div class="setup-unit-add" x-show="!setup.player2ArmyId">
+            <label>Base
+              <select x-model="setup.player2.base">
+                <option value="25x25">25x25</option>
+                <option value="25x50">25x50</option>
+                <option value="50x50">50x50</option>
+                <option value="50x100">50x100</option>
+                <option value="100x50">100x50</option>
+              </select>
+            </label>
+            <label>Minis
+              <input type="number" min="1" max="20" x-model.number="setup.player2.count">
+            </label>
+            <button type="button" @click="addSetupUnit(2)">Add unit</button>
+          </div>
         </div>
       </div>
       <div class="modal-actions">

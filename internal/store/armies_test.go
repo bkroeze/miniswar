@@ -114,6 +114,25 @@ func TestForeignKeysRejectOrphanArmyUnits(t *testing.T) {
 	}
 }
 
+func TestInMemoryStoreCatalogReadersShareSchema(t *testing.T) {
+	st, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	units, err := st.CatalogUnits("Dwarf", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(units) == 0 {
+		t.Fatal("expected in-memory catalog units")
+	}
+	if len(units[0].Terrain) == 0 {
+		t.Fatalf("expected catalog terrain for %s", units[0].ID)
+	}
+}
+
 func TestDefaultMiniCountUsesOneRank(t *testing.T) {
 	st := openTestStore(t)
 	units, err := st.CatalogUnits("Dwarf", "")

@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"miniswar/internal/game"
@@ -18,6 +20,8 @@ import (
 type Store struct {
 	db *sql.DB
 }
+
+var memoryStoreID uint64
 
 func Open(path string) (*Store, error) {
 	db, err := sql.Open("sqlite", sqliteDSN(path))
@@ -49,7 +53,7 @@ func sqliteDSN(path string) string {
 		return path + sep + "_pragma=foreign_keys(1)"
 	}
 	if path == ":memory:" {
-		return "file::memory:?_pragma=foreign_keys(1)"
+		return fmt.Sprintf("file:miniswar-memory-%d?mode=memory&cache=shared&_pragma=foreign_keys(1)", atomic.AddUint64(&memoryStoreID, 1))
 	}
 	u := url.URL{Scheme: "file", Path: path}
 	q := u.Query()

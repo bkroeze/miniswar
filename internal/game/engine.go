@@ -1271,7 +1271,7 @@ func (e *Engine) resolveBrokenCascade(g *Game, brokenUnitID string, tested map[s
 		if !ok {
 			continue
 		}
-		sx, sy := unitCenter(*source)
+		sx, sy := cascadeSourceCenter(*source)
 		for i := range g.Units {
 			unit := &g.Units[i]
 			if queued[unit.ID] || unit.Broken || !unit.Placed || unit.PlayerID != source.PlayerID {
@@ -1646,9 +1646,13 @@ func unitOverlapsTerrain(unit Unit, x, y float64, terrains []TerrainZone, terrai
 }
 
 func unitBoundsAt(unit Unit, x, y float64) rectBounds {
+	return unitBoundsAtFiltered(unit, x, y, false)
+}
+
+func unitBoundsAtFiltered(unit Unit, x, y float64, includeRemoved bool) rectBounds {
 	box := rectBounds{minX: math.Inf(1), minY: math.Inf(1), maxX: math.Inf(-1), maxY: math.Inf(-1)}
 	for _, mini := range unit.Minis {
-		if mini.Removed {
+		if mini.Removed && !includeRemoved {
 			continue
 		}
 		corners := [][2]float64{
@@ -1671,6 +1675,10 @@ func unitBoundsAt(unit Unit, x, y float64) rectBounds {
 		return rectBounds{minX: x, minY: y, maxX: x, maxY: y}
 	}
 	return box
+}
+
+func unitAllMiniBoundsAt(unit Unit, x, y float64) rectBounds {
+	return unitBoundsAtFiltered(unit, x, y, true)
 }
 
 func rectsOverlap(a, b rectBounds) bool {
@@ -2178,6 +2186,14 @@ func activeLocalBounds(unit Unit) rectBounds {
 
 func unitCenter(unit Unit) (float64, float64) {
 	box := unitBoundsAt(unit, unit.X, unit.Y)
+	return (box.minX + box.maxX) / 2, (box.minY + box.maxY) / 2
+}
+
+func cascadeSourceCenter(unit Unit) (float64, float64) {
+	if activeMiniCount(unit) > 0 {
+		return unitCenter(unit)
+	}
+	box := unitAllMiniBoundsAt(unit, unit.X, unit.Y)
 	return (box.minX + box.maxX) / 2, (box.minY + box.maxY) / 2
 }
 

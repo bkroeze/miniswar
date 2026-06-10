@@ -690,7 +690,7 @@ func TestDestroyedUnitTriggersNearbyFriendlyMoraleCascade(t *testing.T) {
 	defender := oneMiniUnit("u2", 2, 100, 75, 180)
 	defender.Stats = UnitStats{A: 20, D: 20, CD: 1, H: 20}
 	setMiniHealth(&defender, 20)
-	nearFriend := oneMiniUnit("u3", 1, 150, 100, 0)
+	nearFriend := oneMiniUnit("u3", 1, 297.5, 100, 0)
 	nearFriend.Stats = UnitStats{A: 11, D: 1, CD: 1, H: 1}
 	nearFriend.Disordered = true
 	setMiniHealth(&nearFriend, 1)

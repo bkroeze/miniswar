@@ -377,6 +377,46 @@ func TestPatchArmyUnitPreservesOmittedFields(t *testing.T) {
 	}
 }
 
+func TestArmyAPIMissingReferencesReturnClientErrors(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	units, err := st.CatalogUnits("Dwarf", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tpl, err := st.CreateArmyTemplate("Template", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tpl, err = st.AddTemplateUnit(tpl.ID, units[0].ID, "Line", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	army, err := st.CreateArmy("Army", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	army, err = st.AddArmyUnit(army.ID, units[0].ID, "Line", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(st, game.NewEngine(1)).Routes()
+	assertJSONError(t, request(t, srv, http.MethodGet, "/api/army-templates/missing-template", ""), http.StatusNotFound, `army template "missing-template" not found`)
+	assertJSONError(t, request(t, srv, http.MethodPost, "/api/army-templates/missing-template/units", `{"catalogUnitId":"`+units[0].ID+`","miniCount":1}`), http.StatusNotFound, `army template "missing-template" not found`)
+	assertJSONError(t, request(t, srv, http.MethodPost, "/api/army-templates/"+tpl.ID+"/units", `{"catalogUnitId":"missing-catalog","miniCount":1}`), http.StatusBadRequest, `catalog unit "missing-catalog" not found`)
+	assertJSONError(t, request(t, srv, http.MethodPatch, "/api/army-templates/"+tpl.ID+"/units/missing-unit", `{"moniker":"New"}`), http.StatusNotFound, `army template unit "missing-unit" not found`)
+	assertJSONError(t, request(t, srv, http.MethodPost, "/api/armies/from-template", `{"templateId":"missing-template","name":"Army"}`), http.StatusBadRequest, `army template "missing-template" not found`)
+	assertJSONError(t, request(t, srv, http.MethodGet, "/api/armies/missing-army", ""), http.StatusNotFound, `army "missing-army" not found`)
+	assertJSONError(t, request(t, srv, http.MethodPost, "/api/armies/missing-army/units", `{"catalogUnitId":"`+units[0].ID+`","miniCount":1}`), http.StatusNotFound, `army "missing-army" not found`)
+	assertJSONError(t, request(t, srv, http.MethodPost, "/api/armies/"+army.ID+"/units", `{"catalogUnitId":"missing-catalog","miniCount":1}`), http.StatusBadRequest, `catalog unit "missing-catalog" not found`)
+	assertJSONError(t, request(t, srv, http.MethodPatch, "/api/armies/"+army.ID+"/units/missing-unit", `{"moniker":"New"}`), http.StatusNotFound, `army unit "missing-unit" not found`)
+}
+
 func request(t *testing.T, handler http.Handler, method, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(method, path, bytes.NewBufferString(body))
@@ -384,6 +424,23 @@ func request(t *testing.T, handler http.Handler, method, path, body string) *htt
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
 	return res
+}
+
+func assertJSONError(t *testing.T, res *httptest.ResponseRecorder, status int, message string) {
+	t.Helper()
+	if res.Code != status {
+		t.Fatalf("status %d: %s", res.Code, res.Body.String())
+	}
+	var got game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.OK {
+		t.Fatalf("response ok = true, want false: %#v", got)
+	}
+	if len(got.Errors) != 1 || got.Errors[0] != message {
+		t.Fatalf("errors = %#v, want [%q]", got.Errors, message)
+	}
 }
 
 func createCombatGameWithFirstPlayer(t *testing.T, st *store.Store, playerID int) (http.Handler, *game.Game) {

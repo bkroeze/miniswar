@@ -682,6 +682,52 @@ func TestActiveUnitRemovedByMoveCombatClearsActivation(t *testing.T) {
 	}
 }
 
+func TestDestroyedUnitTriggersNearbyFriendlyMoraleCascade(t *testing.T) {
+	engine := NewEngine(43)
+	attacker := oneMiniUnit("u1", 1, 100, 100, 0)
+	attacker.Stats = UnitStats{A: 1, D: 1, CD: 1, H: 1}
+	setMiniHealth(&attacker, 1)
+	defender := oneMiniUnit("u2", 2, 100, 75, 180)
+	defender.Stats = UnitStats{A: 20, D: 20, CD: 1, H: 20}
+	setMiniHealth(&defender, 20)
+	nearFriend := oneMiniUnit("u3", 1, 150, 100, 0)
+	nearFriend.Stats = UnitStats{A: 11, D: 1, CD: 1, H: 1}
+	nearFriend.Disordered = true
+	setMiniHealth(&nearFriend, 1)
+	g := &Game{
+		Round:      1,
+		RandomSeed: 43,
+		Battlemap:  Battlemaps()[0],
+		Units:      []Unit{attacker, defender, nearFriend},
+		Engagements: []CombatEngagement{{
+			ID:             "combat-1",
+			AttackerUnitID: "u1",
+			DefenderUnitID: "u2",
+			DefenderFace:   CombatFaceFront,
+			Active:         true,
+		}},
+	}
+
+	result := engine.resolveCombatRound(g, g.Engagements[0], 0, "u1", map[string]bool{})
+
+	destroyed, _ := findUnit(g, "u1")
+	cascaded, _ := findUnit(g, "u3")
+	if !destroyed.Broken || destroyed.Placed {
+		t.Fatalf("destroyed unit state = %+v, want broken and removed from placement", destroyed)
+	}
+	if !cascaded.Broken || cascaded.Placed {
+		t.Fatalf("nearby friendly state = %+v, want broken by cascade", cascaded)
+	}
+	for _, morale := range result.MoraleTests {
+		if morale.UnitID == "u1" {
+			t.Fatalf("destroyed unit should not take its own morale test: %+v", result.MoraleTests)
+		}
+	}
+	if len(result.MoraleTests) != 1 || result.MoraleTests[0].UnitID != "u3" || !result.MoraleTests[0].Cascade {
+		t.Fatalf("morale tests = %+v, want one cascade for nearby friendly", result.MoraleTests)
+	}
+}
+
 func TestCompleteGameIfNoActivePlayersRemainEndsInDraw(t *testing.T) {
 	g := &Game{
 		Round:             1,

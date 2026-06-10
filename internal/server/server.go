@@ -303,7 +303,11 @@ func (s *Server) createArmyTemplate(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getArmyTemplate(w http.ResponseWriter, r *http.Request) {
 	t, err := s.store.GetArmyTemplate(r.PathValue("id"))
 	if err != nil {
-		writeError(w, http.StatusNotFound, err)
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusNotFound, missingResource("army template", r.PathValue("id")))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "template": t, "messages": []string{}})
@@ -317,6 +321,10 @@ func (s *Server) updateArmyTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 	t, err := s.store.UpdateArmyTemplate(r.PathValue("id"), req.Name, req.TargetPoints)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusNotFound, missingResource("army template", r.PathValue("id")))
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -329,8 +337,20 @@ func (s *Server) addTemplateUnit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	if _, err := s.store.GetArmyTemplate(r.PathValue("id")); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusNotFound, missingResource("army template", r.PathValue("id")))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
 	t, err := s.store.AddTemplateUnit(r.PathValue("id"), req.CatalogUnitID, req.Moniker, req.MiniCount)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusBadRequest, missingResource("catalog unit", req.CatalogUnitID))
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -345,12 +365,16 @@ func (s *Server) updateTemplateUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	t, err := s.store.GetArmyTemplate(r.PathValue("id"))
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusNotFound, missingResource("army template", r.PathValue("id")))
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	line, ok := templateUnitByID(t, r.PathValue("unitID"))
 	if !ok {
-		writeError(w, http.StatusInternalServerError, sql.ErrNoRows)
+		writeErrorMessage(w, http.StatusNotFound, missingResource("army template unit", r.PathValue("unitID")))
 		return
 	}
 	moniker := line.DefaultMoniker
@@ -370,7 +394,20 @@ func (s *Server) updateTemplateUnit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deleteTemplateUnit(w http.ResponseWriter, r *http.Request) {
-	t, err := s.store.DeleteTemplateUnit(r.PathValue("id"), r.PathValue("unitID"))
+	t, err := s.store.GetArmyTemplate(r.PathValue("id"))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusNotFound, missingResource("army template", r.PathValue("id")))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if _, ok := templateUnitByID(t, r.PathValue("unitID")); !ok {
+		writeErrorMessage(w, http.StatusNotFound, missingResource("army template unit", r.PathValue("unitID")))
+		return
+	}
+	t, err = s.store.DeleteTemplateUnit(r.PathValue("id"), r.PathValue("unitID"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -409,6 +446,10 @@ func (s *Server) createArmyFromTemplate(w http.ResponseWriter, r *http.Request) 
 	}
 	army, err := s.store.CreateArmyFromTemplate(req.TemplateID, req.Name)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusBadRequest, missingResource("army template", req.TemplateID))
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -418,7 +459,11 @@ func (s *Server) createArmyFromTemplate(w http.ResponseWriter, r *http.Request) 
 func (s *Server) getArmy(w http.ResponseWriter, r *http.Request) {
 	army, err := s.store.GetArmy(r.PathValue("id"))
 	if err != nil {
-		writeError(w, http.StatusNotFound, err)
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusNotFound, missingResource("army", r.PathValue("id")))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "army": army, "messages": []string{}})
@@ -432,6 +477,10 @@ func (s *Server) updateArmy(w http.ResponseWriter, r *http.Request) {
 	}
 	army, err := s.store.UpdateArmy(r.PathValue("id"), req.Name, req.TargetPoints)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusNotFound, missingResource("army", r.PathValue("id")))
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -444,8 +493,20 @@ func (s *Server) addArmyUnit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	if _, err := s.store.GetArmy(r.PathValue("id")); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusNotFound, missingResource("army", r.PathValue("id")))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
 	army, err := s.store.AddArmyUnit(r.PathValue("id"), req.CatalogUnitID, req.Moniker, req.MiniCount)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusBadRequest, missingResource("catalog unit", req.CatalogUnitID))
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -460,12 +521,16 @@ func (s *Server) updateArmyUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	army, err := s.store.GetArmy(r.PathValue("id"))
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusNotFound, missingResource("army", r.PathValue("id")))
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	line, ok := armyUnitByID(army, r.PathValue("unitID"))
 	if !ok {
-		writeError(w, http.StatusInternalServerError, sql.ErrNoRows)
+		writeErrorMessage(w, http.StatusNotFound, missingResource("army unit", r.PathValue("unitID")))
 		return
 	}
 	moniker := line.Moniker
@@ -489,7 +554,20 @@ func (s *Server) updateArmyUnit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deleteArmyUnit(w http.ResponseWriter, r *http.Request) {
-	army, err := s.store.DeleteArmyUnit(r.PathValue("id"), r.PathValue("unitID"))
+	army, err := s.store.GetArmy(r.PathValue("id"))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusNotFound, missingResource("army", r.PathValue("id")))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if _, ok := armyUnitByID(army, r.PathValue("unitID")); !ok {
+		writeErrorMessage(w, http.StatusNotFound, missingResource("army unit", r.PathValue("unitID")))
+		return
+	}
+	army, err = s.store.DeleteArmyUnit(r.PathValue("id"), r.PathValue("unitID"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -553,6 +631,17 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, err error) {
 	writeJSON(w, status, game.APIResponse{OK: false, Messages: []string{}, Errors: []string{cleanErr(err)}})
+}
+
+func writeErrorMessage(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, game.APIResponse{OK: false, Messages: []string{}, Errors: []string{message}})
+}
+
+func missingResource(kind, id string) string {
+	if id == "" {
+		return kind + " is missing"
+	}
+	return kind + " " + strconv.Quote(id) + " not found"
 }
 
 func cleanErr(err error) string {

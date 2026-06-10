@@ -117,7 +117,7 @@ func (e *Engine) NewGame(setup Setup) (*Game, error) {
 	}
 	first := e.rng.Intn(2) + 1
 	gameSeed := e.rng.Int63()
-	return &Game{
+	g := &Game{
 		ID:                  fmt.Sprintf("%d-%06d", time.Now().UnixNano(), e.rng.Intn(1000000)),
 		Round:               1,
 		ActivePlayer:        first,
@@ -132,7 +132,14 @@ func (e *Engine) NewGame(setup Setup) (*Game, error) {
 		OpeningInitiativeD2: first,
 		Battlemap:           battlemap,
 		Engagements:         []CombatEngagement{},
-	}, nil
+	}
+	if allUnitsPlaced(g) {
+		g.Phase = "awaiting_activation"
+		completeGameIfWon(g)
+	} else if !playerHasUnplacedUnit(g, g.ActivePlayer) {
+		g.ActivePlayer = nextPlacementPlayer(g)
+	}
+	return g, nil
 }
 
 func playerUnitID(playerID, index int) string {
@@ -165,6 +172,7 @@ func newUnit(player int, id, name string, setup UnitSetup, activation, x, y, fac
 		ArmyUnitID:       setup.ArmyUnitID,
 		MaxHealth:        setup.MaxHealth,
 		CurrentHealth:    setup.CurrentHealth,
+		CurrentHealthSet: setup.CurrentHealthSet,
 		Stats:            setup.Stats,
 		Base:             base,
 		ActivationNumber: activation,
@@ -191,6 +199,7 @@ func layoutMinis(unit Unit, count int) []Mini {
 	for i := 0; i < count; i++ {
 		rank := i / unit.Base.PerRank
 		file := i % unit.Base.PerRank
+		health := miniStartingHealth(unit)
 		minis = append(minis, Mini{
 			Key:             fmt.Sprintf("p%d-%s-m%02d", unit.PlayerID, unit.ID, i+1),
 			UnitID:          unit.ID,
@@ -202,7 +211,8 @@ func layoutMinis(unit Unit, count int) []Mini {
 			WidthMM:         unit.Base.WidthMM,
 			DepthMM:         unit.Base.DepthMM,
 			IsOfficer:       rank == 0 && file == officerFile,
-			HealthRemaining: miniStartingHealth(unit),
+			HealthRemaining: health,
+			Removed:         health <= 0,
 		})
 	}
 	return minis
@@ -266,6 +276,9 @@ func (e *Engine) PlaceUnit(g *Game, req PlacementRequest) (*ActionRecord, error)
 		g.Phase = "awaiting_activation"
 		g.ActivePlayer = g.FirstPlayer
 		messages = append(messages, fmt.Sprintf("Setup complete. Player %d starts round 1.", g.ActivePlayer))
+		if message := completeGameIfWon(g); message != "" {
+			messages = append(messages, message)
+		}
 	} else {
 		g.ActivePlayer = nextPlacementPlayer(g)
 	}
@@ -845,15 +858,15 @@ func snapAttackerFlush(attacker *Unit, defender Unit, defenderFace string, terra
 		return false
 	}
 	faceMidX, faceMidY := defenderFaceMidpoint(defender, defenderFace)
+	startX := attacker.X
+	startY := attacker.Y
+	startFacing := attacker.FacingDeg
 	attacker.FacingDeg = attackerFacingForDefenderFace(defender.FacingDeg, defenderFace)
 	frontOffset := miniCenterY(officer) - activeLocalBounds(*attacker).minY
 	normalX, normalY := facingVector(attacker.FacingDeg, 1)
 	officerX := faceMidX - normalX*frontOffset
 	officerY := faceMidY - normalY*frontOffset
 	relX, relY := rotatePoint(miniCenterX(officer), miniCenterY(officer), attacker.FacingDeg)
-	startX := attacker.X
-	startY := attacker.Y
-	startFacing := attacker.FacingDeg
 	for offset := 0.0; offset <= 100; offset++ {
 		attacker.X = officerX - relX - normalX*offset
 		attacker.Y = officerY - relY - normalY*offset
@@ -1558,7 +1571,7 @@ func placementUnitID(g *Game) (string, bool) {
 	player := g.ActivePlayer
 	for checked := 0; checked < 2; checked++ {
 		for _, unit := range g.Units {
-			if unit.PlayerID == player && !unit.Placed {
+			if unit.PlayerID == player && !unit.Placed && activeMiniCount(unit) > 0 {
 				return unit.ID, true
 			}
 		}
@@ -1577,7 +1590,7 @@ func nextPlacementPlayer(g *Game) int {
 
 func playerHasUnplacedUnit(g *Game, playerID int) bool {
 	for _, unit := range g.Units {
-		if unit.PlayerID == playerID && !unit.Placed {
+		if unit.PlayerID == playerID && !unit.Placed && activeMiniCount(unit) > 0 {
 			return true
 		}
 	}
@@ -1586,7 +1599,7 @@ func playerHasUnplacedUnit(g *Game, playerID int) bool {
 
 func allUnitsPlaced(g *Game) bool {
 	for _, unit := range g.Units {
-		if !unit.Placed {
+		if !unit.Placed && activeMiniCount(unit) > 0 {
 			return false
 		}
 	}
@@ -1979,7 +1992,7 @@ func otherPlayer(playerID int) int {
 
 func playerHasUnactivatedUnit(g *Game, playerID int) bool {
 	for _, unit := range g.Units {
-		if unit.PlayerID == playerID && !unit.Broken && !unitActivatedThisRound(g, unit.ID) {
+		if unit.PlayerID == playerID && !unit.Broken && unit.Placed && activeMiniCount(unit) > 0 && !unitActivatedThisRound(g, unit.ID) {
 			return true
 		}
 	}
@@ -1994,7 +2007,7 @@ func allUnitsActivated(g *Game) bool {
 		}
 	}
 	for _, unit := range g.Units {
-		if unit.Broken {
+		if unit.Broken || !unit.Placed || activeMiniCount(unit) == 0 {
 			continue
 		}
 		if !seen[unit.ID] {
@@ -2005,24 +2018,32 @@ func allUnitsActivated(g *Game) bool {
 }
 
 func completeGameIfWon(g *Game) string {
-	if g.Phase == "setup" || g.WinnerPlayerID != 0 {
+	if g.Phase == "setup" || g.Phase == "complete" || g.WinnerPlayerID != 0 {
 		return ""
 	}
 	players := activePlayersRemaining(g)
+	if len(players) == 0 {
+		completeGame(g, 0)
+		return "No players have active units remaining; game ends in a draw."
+	}
 	if len(players) != 1 {
 		return ""
 	}
 	for playerID := range players {
-		g.WinnerPlayerID = playerID
-		g.Phase = "complete"
-		g.CurrentActivation = nil
-		g.PendingCombatChoice = nil
-		for i := range g.Engagements {
-			g.Engagements[i].Active = false
-		}
+		completeGame(g, playerID)
 		return fmt.Sprintf("Player %d wins.", playerID)
 	}
 	return ""
+}
+
+func completeGame(g *Game, winnerPlayerID int) {
+	g.WinnerPlayerID = winnerPlayerID
+	g.Phase = "complete"
+	g.CurrentActivation = nil
+	g.PendingCombatChoice = nil
+	for i := range g.Engagements {
+		g.Engagements[i].Active = false
+	}
 }
 
 func activePlayersRemaining(g *Game) map[int]bool {
@@ -2057,6 +2078,9 @@ func miniMaxHealth(unit Unit) int {
 
 func miniStartingHealth(unit Unit) int {
 	maxHealth := miniMaxHealth(unit)
+	if unit.CurrentHealthSet && unit.CurrentHealth <= 0 {
+		return 0
+	}
 	if unit.CurrentHealth > 0 {
 		return min(unit.CurrentHealth, maxHealth)
 	}

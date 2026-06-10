@@ -80,8 +80,8 @@ func TestNewGameSetsMovementLimitFromMovementStat(t *testing.T) {
 func TestNewGameCarriesRosterCurrentHealthIntoMinis(t *testing.T) {
 	engine := NewEngine(1)
 	g, err := engine.NewGame(Setup{
-		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, MaxHealth: 4, CurrentHealth: 2, Stats: UnitStats{H: 4}},
-		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, MaxHealth: 4, CurrentHealth: 4, Stats: UnitStats{H: 4}},
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, MaxHealth: 4, CurrentHealth: 2, CurrentHealthSet: true, Stats: UnitStats{H: 4}},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, MaxHealth: 4, CurrentHealth: 4, CurrentHealthSet: true, Stats: UnitStats{H: 4}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -90,6 +90,37 @@ func TestNewGameCarriesRosterCurrentHealthIntoMinis(t *testing.T) {
 		if mini.HealthRemaining != 2 {
 			t.Fatalf("mini health = %d, want roster current health 2", mini.HealthRemaining)
 		}
+	}
+}
+
+func TestNewGameCarriesZeroRosterHealthAsRemovedMinis(t *testing.T) {
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{
+		Player1: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, MaxHealth: 4, CurrentHealth: 0, CurrentHealthSet: true, Stats: UnitStats{H: 4}},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, MaxHealth: 4, CurrentHealth: 4, CurrentHealthSet: true, Stats: UnitStats{H: 4}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if activeMiniCount(g.Units[0]) != 0 {
+		t.Fatalf("zero-health roster unit active minis = %d, want 0", activeMiniCount(g.Units[0]))
+	}
+	for _, mini := range g.Units[0].Minis {
+		if mini.HealthRemaining != 0 || !mini.Removed {
+			t.Fatalf("zero-health mini should remain removed, got %+v", mini)
+		}
+	}
+	if unitID, ok := placementUnitID(g); !ok || unitID != "u2" {
+		t.Fatalf("placement should skip zero-health unit, got %q ok=%v", unitID, ok)
+	}
+	if g.ActivePlayer != 2 {
+		t.Fatalf("active player = %d, want only fieldable player 2", g.ActivePlayer)
+	}
+	if _, err := engine.PlaceUnit(g, PlacementRequest{PlayerID: 2, UnitID: "u2", X: 300, Y: 300}); err != nil {
+		t.Fatal(err)
+	}
+	if g.Phase != "complete" || g.WinnerPlayerID != 2 {
+		t.Fatalf("single fieldable player should win after setup: phase=%q winner=%d", g.Phase, g.WinnerPlayerID)
 	}
 }
 
@@ -581,6 +612,27 @@ func TestActivatingUnitInExistingEngagementResolvesCombat(t *testing.T) {
 	}
 }
 
+func TestBlockedCombatAlignmentRestoresFacing(t *testing.T) {
+	attacker := formationUnit("u1", 1, 100, 100, 90, 1)
+	defender := formationUnit("u2", 2, 100, 50, 0, 1)
+	terrains := []TerrainZone{{
+		ID:     "blocked",
+		Type:   TerrainImpassable,
+		Shape:  "rect",
+		X:      0,
+		Y:      0,
+		Width:  760,
+		Height: 520,
+	}}
+
+	if snapAttackerFlush(&attacker, defender, CombatFaceFront, terrains, []Unit{attacker, defender}) {
+		t.Fatal("expected combat alignment to be blocked")
+	}
+	if attacker.FacingDeg != 90 {
+		t.Fatalf("blocked alignment facing = %d, want restored 90", attacker.FacingDeg)
+	}
+}
+
 func TestActiveUnitRemovedByMoveCombatClearsActivation(t *testing.T) {
 	engine := NewEngine(43)
 	g := &Game{
@@ -627,6 +679,44 @@ func TestActiveUnitRemovedByMoveCombatClearsActivation(t *testing.T) {
 	}
 	if actions := LegalActions(g); len(actions) != 0 {
 		t.Fatalf("complete game should have no legal actions, got %v", actions)
+	}
+}
+
+func TestCompleteGameIfNoActivePlayersRemainEndsInDraw(t *testing.T) {
+	g := &Game{
+		Round:             1,
+		Phase:             "awaiting_activation",
+		CurrentActivation: &Activation{UnitID: "u1", PlayerID: 1, ActionsRemaining: 1},
+		PendingCombatChoice: &PendingCombatChoice{
+			EngagementID:    "combat-1",
+			WinningUnitID:   "u1",
+			WinningPlayerID: 1,
+			LosingUnitID:    "u2",
+		},
+		Engagements: []CombatEngagement{{ID: "combat-1", Active: true}},
+		Units: []Unit{
+			oneMiniUnit("u1", 1, 100, 100, 0),
+			oneMiniUnit("u2", 2, 100, 125, 180),
+		},
+	}
+	for i := range g.Units {
+		g.Units[i].Minis[0].Removed = true
+		g.Units[i].Minis[0].HealthRemaining = 0
+	}
+
+	message := completeGameIfWon(g)
+
+	if message != "No players have active units remaining; game ends in a draw." {
+		t.Fatalf("message = %q", message)
+	}
+	if g.Phase != "complete" || g.WinnerPlayerID != 0 || g.CurrentActivation != nil || g.PendingCombatChoice != nil {
+		t.Fatalf("draw should complete without winner: phase=%q winner=%d activation=%+v pending=%+v", g.Phase, g.WinnerPlayerID, g.CurrentActivation, g.PendingCombatChoice)
+	}
+	if g.Engagements[0].Active {
+		t.Fatalf("draw should deactivate engagements: %+v", g.Engagements)
+	}
+	if actions := LegalActions(g); len(actions) != 0 {
+		t.Fatalf("complete draw should have no legal actions, got %v", actions)
 	}
 }
 

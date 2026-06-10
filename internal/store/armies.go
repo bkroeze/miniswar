@@ -429,15 +429,16 @@ func (s *Store) ArmyUnitSetups(armyID string, playerID int) ([]game.UnitSetup, e
 	out := make([]game.UnitSetup, 0, len(army.Units))
 	for _, au := range army.Units {
 		out = append(out, game.UnitSetup{
-			BaseWidthMM:   au.CatalogUnit.BaseWidthMM,
-			BaseDepthMM:   au.CatalogUnit.BaseDepthMM,
-			Count:         au.MiniCount,
-			Name:          au.Moniker,
-			CatalogUnitID: au.CatalogUnitID,
-			ArmyID:        armyID,
-			ArmyUnitID:    au.ID,
-			MaxHealth:     au.MaxHealth,
-			CurrentHealth: au.CurrentHealth,
+			BaseWidthMM:      au.CatalogUnit.BaseWidthMM,
+			BaseDepthMM:      au.CatalogUnit.BaseDepthMM,
+			Count:            au.MiniCount,
+			Name:             au.Moniker,
+			CatalogUnitID:    au.CatalogUnitID,
+			ArmyID:           armyID,
+			ArmyUnitID:       au.ID,
+			MaxHealth:        au.MaxHealth,
+			CurrentHealth:    au.CurrentHealth,
+			CurrentHealthSet: true,
 			Stats: game.UnitStats{
 				A: au.CatalogUnit.A, M: au.CatalogUnit.M, F: au.CatalogUnit.F, S: au.CatalogUnit.S,
 				D: au.CatalogUnit.D, CD: au.CatalogUnit.CD, H: au.CatalogUnit.H, Pts: au.CatalogUnit.Pts,

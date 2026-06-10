@@ -54,16 +54,17 @@ type Setup struct {
 }
 
 type UnitSetup struct {
-	BaseWidthMM   int       `json:"baseWidthMm"`
-	BaseDepthMM   int       `json:"baseDepthMm"`
-	Count         int       `json:"count"`
-	Name          string    `json:"name,omitempty"`
-	CatalogUnitID string    `json:"catalogUnitId,omitempty"`
-	ArmyID        string    `json:"armyId,omitempty"`
-	ArmyUnitID    string    `json:"armyUnitId,omitempty"`
-	MaxHealth     int       `json:"maxHealth,omitempty"`
-	CurrentHealth int       `json:"currentHealth,omitempty"`
-	Stats         UnitStats `json:"stats,omitempty"`
+	BaseWidthMM      int       `json:"baseWidthMm"`
+	BaseDepthMM      int       `json:"baseDepthMm"`
+	Count            int       `json:"count"`
+	Name             string    `json:"name,omitempty"`
+	CatalogUnitID    string    `json:"catalogUnitId,omitempty"`
+	ArmyID           string    `json:"armyId,omitempty"`
+	ArmyUnitID       string    `json:"armyUnitId,omitempty"`
+	MaxHealth        int       `json:"maxHealth,omitempty"`
+	CurrentHealth    int       `json:"currentHealth,omitempty"`
+	CurrentHealthSet bool      `json:"-"`
+	Stats            UnitStats `json:"stats,omitempty"`
 }
 
 type UnitStats struct {
@@ -124,6 +125,7 @@ type Unit struct {
 	ArmyUnitID       string    `json:"armyUnitId,omitempty"`
 	MaxHealth        int       `json:"maxHealth,omitempty"`
 	CurrentHealth    int       `json:"currentHealth,omitempty"`
+	CurrentHealthSet bool      `json:"-"`
 	Stats            UnitStats `json:"stats,omitempty"`
 	Base             BaseSize  `json:"base"`
 	ActivationNumber int       `json:"activationNumber"`

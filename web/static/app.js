@@ -8,10 +8,16 @@ function createMiniswarApp() {
     setupSidebarCollapsed: false,
     newGameConfigOpen: false,
     loadGamesOpen: false,
+    battlemapEditorOpen: false,
     savedGames: [],
     savedGamesLoading: false,
     armies: [],
+    battlemaps: [],
+    editorBattlemap: null,
+    selectedTerrainId: "",
     armyDefaultsApplied: false,
+    camera: { x: 0, y: 0, width: 760, height: 520 },
+    cameraMapId: "",
     setup: {
       battlemapId: "old_road",
       player1ArmyId: "",
@@ -31,13 +37,14 @@ function createMiniswarApp() {
     },
 
     async initGame() {
-      await this.loadArmies({ defaultSelections: true });
+      await Promise.all([this.loadBattlemaps(), this.loadArmies({ defaultSelections: true })]);
       this.openNewGameConfig();
     },
 
     async openNewGameConfig() {
-      await this.loadArmies();
+      await Promise.all([this.loadBattlemaps(), this.loadArmies()]);
       this.newGameConfigOpen = true;
+      this.ensureCameraForCurrentMap();
     },
 
     closeNewGameConfig() {
@@ -69,7 +76,7 @@ function createMiniswarApp() {
     },
 
     async createGame() {
-      await this.loadArmies();
+      await Promise.all([this.loadBattlemaps(), this.loadArmies()]);
       const response = await this.api("/api/games", {
         method: "POST",
         body: JSON.stringify(this.setupPayload()),
@@ -79,6 +86,21 @@ function createMiniswarApp() {
         await this.setGame(response.game, { resetSelection: true });
       }
       this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    async loadBattlemaps() {
+      const response = await this.api("/api/battlemaps");
+      if (response.ok) {
+        this.battlemaps = response.battlemaps || [];
+        if (!this.setup.battlemapId && this.battlemaps[0]) this.setup.battlemapId = this.battlemaps[0].id;
+        if (this.setup.battlemapId && !this.battlemaps.some((battlemap) => battlemap.id === this.setup.battlemapId) && this.battlemaps[0]) {
+          this.setup.battlemapId = this.battlemaps[0].id;
+        }
+        this.ensureCameraForCurrentMap();
+      }
+      if (!response.ok) {
+        this.messages = [...(response.messages || []), ...(response.errors || [])];
+      }
     },
 
     async loadArmies({ defaultSelections = false } = {}) {
@@ -106,6 +128,108 @@ function createMiniswarApp() {
 
     closeLoadGames() {
       this.loadGamesOpen = false;
+    },
+
+    async openBattlemapEditor() {
+      await this.loadBattlemaps();
+      this.battlemapEditorOpen = true;
+      if (!this.editorBattlemap) {
+        const first = this.battlemaps.find((battlemap) => battlemap.id === this.setup.battlemapId) || this.battlemaps[0];
+        if (first) this.selectBattlemapForEdit(first.id);
+        else this.newBattlemap();
+      }
+    },
+
+    closeBattlemapEditor() {
+      this.battlemapEditorOpen = false;
+    },
+
+    cloneBattlemap(battlemap) {
+      return JSON.parse(JSON.stringify(battlemap));
+    },
+
+    selectBattlemapForEdit(id) {
+      const battlemap = this.battlemaps.find((candidate) => candidate.id === id);
+      if (!battlemap) return;
+      this.editorBattlemap = this.cloneBattlemap(battlemap);
+      this.editorBattlemap.terrains ||= [];
+      this.selectedTerrainId = this.editorBattlemap.terrains[0]?.id || "";
+    },
+
+    newBattlemap() {
+      this.editorBattlemap = {
+        id: "",
+        name: "New Battlemap",
+        widthMm: 760,
+        heightMm: 520,
+        terrains: [],
+      };
+      this.selectedTerrainId = "";
+    },
+
+    editorViewBox() {
+      const battlemap = this.editorBattlemap || { widthMm: 760, heightMm: 520 };
+      return `0 0 ${battlemap.widthMm || 760} ${battlemap.heightMm || 520}`;
+    },
+
+    selectedTerrain() {
+      return this.editorBattlemap?.terrains?.find((terrain) => terrain.id === this.selectedTerrainId) || null;
+    },
+
+    addEditorTerrain() {
+      if (!this.editorBattlemap) return;
+      this.editorBattlemap.terrains ||= [];
+      const index = this.editorBattlemap.terrains.length + 1;
+      const terrain = {
+        id: `terrain-${Date.now()}`,
+        type: "rough",
+        label: "rough",
+        shape: "rect",
+        x: 25 * index,
+        y: 25 * index,
+        width: 100,
+        height: 75,
+      };
+      this.editorBattlemap.terrains.push(terrain);
+      this.selectedTerrainId = terrain.id;
+    },
+
+    deleteEditorTerrain() {
+      if (!this.editorBattlemap || !this.selectedTerrainId) return;
+      this.editorBattlemap.terrains = (this.editorBattlemap.terrains || []).filter((terrain) => terrain.id !== this.selectedTerrainId);
+      this.selectedTerrainId = this.editorBattlemap.terrains[0]?.id || "";
+    },
+
+    async saveEditorBattlemap() {
+      if (!this.editorBattlemap) return;
+      const method = this.editorBattlemap.id ? "PATCH" : "POST";
+      const path = this.editorBattlemap.id ? `/api/battlemaps/${this.editorBattlemap.id}` : "/api/battlemaps";
+      const wasNew = !this.editorBattlemap.id;
+      const response = await this.api(path, { method, body: JSON.stringify(this.editorBattlemap) });
+      if (response.ok) {
+        await this.loadBattlemaps();
+        this.selectBattlemapForEdit(response.battlemap.id);
+        if (wasNew) this.setup.battlemapId = response.battlemap.id;
+        else this.setup.battlemapId ||= response.battlemap.id;
+        this.renderArena();
+      }
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    async deleteEditorBattlemap() {
+      if (!this.editorBattlemap?.id) return;
+      const response = await this.api(`/api/battlemaps/${this.editorBattlemap.id}`, { method: "DELETE" });
+      if (response.ok) {
+        await this.loadBattlemaps();
+        const first = this.battlemaps[0];
+        if (first) this.selectBattlemapForEdit(first.id);
+        else this.newBattlemap();
+        if (!this.battlemaps.some((battlemap) => battlemap.id === this.setup.battlemapId)) {
+          this.setup.battlemapId = this.battlemaps[0]?.id || "";
+        }
+        this.renderArena();
+      }
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
     },
 
     async loadGame(gameId) {
@@ -442,6 +566,7 @@ function createMiniswarApp() {
     async setGame(game, options = {}) {
       const previousActivationUnitId = this.game?.currentActivation?.unitId || "";
       this.game = game;
+      this.ensureCameraForCurrentMap();
       const activationUnit = this.currentActivationUnit();
       if (activationUnit && activationUnit.id !== previousActivationUnitId) {
         this.resetMoveDistanceForUnit(activationUnit);
@@ -478,6 +603,81 @@ function createMiniswarApp() {
       point.y = event.clientY;
       const transformed = point.matrixTransform(svg.getScreenCTM().inverse());
       return { x: transformed.x, y: transformed.y };
+    },
+
+    activeBattlemap() {
+      return this.game?.battlemap || this.battlemaps.find((battlemap) => battlemap.id === this.setup.battlemapId) || { id: "default", widthMm: 760, heightMm: 520, terrains: [] };
+    },
+
+    battlemapWidth() {
+      return this.activeBattlemap().widthMm || 760;
+    },
+
+    battlemapHeight() {
+      return this.activeBattlemap().heightMm || 520;
+    },
+
+    arenaViewBox() {
+      this.ensureCameraForCurrentMap();
+      return `${this.camera.x} ${this.camera.y} ${this.camera.width} ${this.camera.height}`;
+    },
+
+    ensureCameraForCurrentMap() {
+      const battlemap = this.activeBattlemap();
+      const mapKey = `${battlemap.id || "custom"}:${battlemap.widthMm || 760}x${battlemap.heightMm || 520}`;
+      if (this.cameraMapId !== mapKey || !this.camera.width || !this.camera.height) {
+        this.cameraMapId = mapKey;
+        this.fitCameraToMap();
+        return;
+      }
+      this.clampCamera();
+    },
+
+    fitCameraToMap() {
+      this.camera = { x: 0, y: 0, width: this.battlemapWidth(), height: this.battlemapHeight() };
+      this.clampCamera();
+    },
+
+    zoomCamera(factor) {
+      this.ensureCameraForCurrentMap();
+      const centerX = this.camera.x + this.camera.width / 2;
+      const centerY = this.camera.y + this.camera.height / 2;
+      const mapWidth = this.battlemapWidth();
+      const mapHeight = this.battlemapHeight();
+      let nextWidth = this.camera.width * factor;
+      let nextHeight = this.camera.height * factor;
+      const minSide = Math.min(nextWidth, nextHeight);
+      if (minSide < 200) {
+        const correction = 200 / minSide;
+        nextWidth *= correction;
+        nextHeight *= correction;
+      }
+      nextWidth = Math.min(nextWidth, mapWidth);
+      nextHeight = Math.min(nextHeight, mapHeight);
+      this.camera = { x: centerX - nextWidth / 2, y: centerY - nextHeight / 2, width: nextWidth, height: nextHeight };
+      this.clampCamera();
+      this.renderArena();
+    },
+
+    arenaWheel(event) {
+      this.zoomCamera(event.deltaY < 0 ? 0.9 : 1.1);
+    },
+
+    panCamera(dx, dy) {
+      this.ensureCameraForCurrentMap();
+      this.camera.x += this.camera.width * dx;
+      this.camera.y += this.camera.height * dy;
+      this.clampCamera();
+      this.renderArena();
+    },
+
+    clampCamera() {
+      const mapWidth = this.battlemapWidth();
+      const mapHeight = this.battlemapHeight();
+      this.camera.width = Math.min(Math.max(this.camera.width, 1), mapWidth);
+      this.camera.height = Math.min(Math.max(this.camera.height, 1), mapHeight);
+      this.camera.x = Math.max(0, Math.min(this.camera.x, mapWidth - this.camera.width));
+      this.camera.y = Math.max(0, Math.min(this.camera.y, mapHeight - this.camera.height));
     },
 
     async arenaClicked(event) {
@@ -640,7 +840,7 @@ function createMiniswarApp() {
       if (!root) return;
       root.replaceChildren();
       const ns = "http://www.w3.org/2000/svg";
-      for (const terrain of this.game?.battlemap?.terrains || []) {
+      for (const terrain of this.activeBattlemap().terrains || []) {
         if (terrain.shape !== "rect") continue;
         const rect = document.createElementNS(ns, "rect");
         rect.setAttribute("x", terrain.x);

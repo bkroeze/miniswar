@@ -36,12 +36,13 @@ The front facing quadrant is called "front", the others proceding clockwise are 
 
 ## Terrain
 
-The arena can contain terrain zones measured in millimeters.
+The arena is a battlemap measured in millimeters. Each battlemap defines its own width, height, and terrain zones.
 
 - Rough terrain doubles movement cost only for the portion of a move where the unit overlaps it.
 - Impassable terrain blocks placement, movement, pivot, about face, combat alignment, and pushback or withdraw movement.
 - Path terrain is currently visual only.
 - Passable obstacles do not block movement, but a unit moving into combat across or into contact with one counts as attacking an enemy behind fortifications.
+- Units must remain within the active battlemap bounds. Pushback and withdraw movement stop at the edge of the map.
 
 ## Activating
 

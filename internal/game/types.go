@@ -51,6 +51,7 @@ type Setup struct {
 	Player1ArmyID string      `json:"player1ArmyId,omitempty"`
 	Player2ArmyID string      `json:"player2ArmyId,omitempty"`
 	BattlemapID   string      `json:"battlemapId,omitempty"`
+	Battlemap     Battlemap   `json:"battlemap,omitempty"`
 }
 
 type UnitSetup struct {
@@ -100,9 +101,12 @@ type Game struct {
 }
 
 type Battlemap struct {
-	ID       string        `json:"id"`
-	Name     string        `json:"name"`
-	Terrains []TerrainZone `json:"terrains"`
+	ID        string        `json:"id"`
+	Name      string        `json:"name"`
+	WidthMM   float64       `json:"widthMm"`
+	HeightMM  float64       `json:"heightMm"`
+	Terrains  []TerrainZone `json:"terrains"`
+	IsBuiltin bool          `json:"isBuiltin,omitempty"`
 }
 
 type TerrainZone struct {

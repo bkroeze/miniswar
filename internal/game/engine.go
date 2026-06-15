@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -22,8 +23,10 @@ func NewEngine(seed int64) *Engine {
 func Battlemaps() []Battlemap {
 	return []Battlemap{
 		{
-			ID:   "old_road",
-			Name: "Old Road",
+			ID:       "old_road",
+			Name:     "Old Road",
+			WidthMM:  ArenaWidthMM,
+			HeightMM: ArenaHeightMM,
 			Terrains: []TerrainZone{
 				{ID: "old-road-east", Type: TerrainPath, Label: "road", Shape: "rect", X: 0, Y: 230, Width: 760, Height: 55},
 				{ID: "old-road-north", Type: TerrainPath, Label: "road", Shape: "rect", X: 420, Y: 0, Width: 60, Height: 230},
@@ -32,8 +35,10 @@ func Battlemaps() []Battlemap {
 			},
 		},
 		{
-			ID:   "forest_wall",
-			Name: "Forest Wall",
+			ID:       "forest_wall",
+			Name:     "Forest Wall",
+			WidthMM:  ArenaWidthMM,
+			HeightMM: ArenaHeightMM,
 			Terrains: []TerrainZone{
 				{ID: "lane-east", Type: TerrainPath, Label: "path", Shape: "rect", X: 575, Y: 0, Width: 55, Height: 520},
 				{ID: "lane-cross", Type: TerrainPath, Label: "path", Shape: "rect", X: 120, Y: 210, Width: 510, Height: 45},
@@ -59,6 +64,58 @@ func BattlemapByID(id string) (Battlemap, bool) {
 	return Battlemap{}, false
 }
 
+func NormalizeBattlemap(battlemap *Battlemap) {
+	if battlemap == nil {
+		return
+	}
+	if battlemap.WidthMM <= 0 {
+		battlemap.WidthMM = ArenaWidthMM
+	}
+	if battlemap.HeightMM <= 0 {
+		battlemap.HeightMM = ArenaHeightMM
+	}
+	if battlemap.Terrains == nil {
+		battlemap.Terrains = []TerrainZone{}
+	}
+}
+
+func ValidateBattlemap(battlemap Battlemap) error {
+	NormalizeBattlemap(&battlemap)
+	if strings.TrimSpace(battlemap.Name) == "" {
+		return errors.New("battlemap name is required")
+	}
+	if battlemap.WidthMM <= 0 || battlemap.HeightMM <= 0 {
+		return errors.New("battlemap dimensions must be greater than 0")
+	}
+	for _, terrain := range battlemap.Terrains {
+		if err := validateTerrainZone(terrain, battlemap); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateTerrainZone(terrain TerrainZone, battlemap Battlemap) error {
+	if strings.TrimSpace(terrain.ID) == "" {
+		return errors.New("terrain id is required")
+	}
+	switch terrain.Type {
+	case TerrainRough, TerrainImpassable, TerrainPath, TerrainPassableObstacle:
+	default:
+		return fmt.Errorf("unsupported terrain type %q", terrain.Type)
+	}
+	if terrain.Shape != "rect" {
+		return fmt.Errorf("unsupported terrain shape %q", terrain.Shape)
+	}
+	if terrain.Width <= 0 || terrain.Height <= 0 {
+		return fmt.Errorf("terrain %q dimensions must be greater than 0", terrain.ID)
+	}
+	if terrain.X < 0 || terrain.Y < 0 || terrain.X+terrain.Width > battlemap.WidthMM || terrain.Y+terrain.Height > battlemap.HeightMM {
+		return fmt.Errorf("terrain %q must stay inside the battlemap", terrain.ID)
+	}
+	return nil
+}
+
 func Base(width, depth int) (BaseSize, bool) {
 	switch {
 	case width == 25 && depth == 25:
@@ -77,9 +134,17 @@ func Base(width, depth int) (BaseSize, bool) {
 }
 
 func (e *Engine) NewGame(setup Setup) (*Game, error) {
-	battlemap, ok := BattlemapByID(setup.BattlemapID)
-	if !ok {
-		return nil, fmt.Errorf("unknown battlemap %q", setup.BattlemapID)
+	battlemap := setup.Battlemap
+	if battlemap.ID == "" && battlemap.Name == "" {
+		var ok bool
+		battlemap, ok = BattlemapByID(setup.BattlemapID)
+		if !ok {
+			return nil, fmt.Errorf("unknown battlemap %q", setup.BattlemapID)
+		}
+	}
+	NormalizeBattlemap(&battlemap)
+	if err := ValidateBattlemap(battlemap); err != nil {
+		return nil, err
 	}
 	p1Setups := setup.Player1Units
 	if len(p1Setups) == 0 {
@@ -245,7 +310,7 @@ func (e *Engine) PlaceUnit(g *Game, req PlacementRequest) (*ActionRecord, error)
 		return nil, errors.New("unit is already placed")
 	}
 
-	unit.FacingDeg = facingTowardArenaCenter(req.X, req.Y)
+	unit.FacingDeg = facingTowardBattlemapCenter(g.Battlemap, req.X, req.Y)
 	if req.FacingDeg != nil {
 		unit.FacingDeg = normalizeDeg(*req.FacingDeg)
 	}
@@ -265,7 +330,7 @@ func (e *Engine) PlaceUnit(g *Game, req PlacementRequest) (*ActionRecord, error)
 		unit.Placed = false
 		return nil, errors.New("placement overlaps another unit")
 	}
-	if !unitInsideArena(*unit, unit.X, unit.Y) {
+	if !unitInsideBattlemap(*unit, unit.X, unit.Y, g.Battlemap) {
 		unit.Placed = false
 		return nil, errors.New("placement must keep the whole unit in the arena")
 	}
@@ -441,7 +506,7 @@ func (e *Engine) ApplyAction(g *Game, req ActionRequest) (*ActionRecord, error) 
 		if err := applyAboutFace(&candidate); err != nil {
 			return nil, err
 		}
-		if err := validateUnitPosition(candidate, g.Battlemap.Terrains, g.Units); err != nil {
+		if err := validateUnitPosition(candidate, g.Battlemap, g.Units); err != nil {
 			return nil, err
 		}
 		*unit = candidate
@@ -550,7 +615,7 @@ func moveCombatChoiceUnit(g *Game, unitID string, dx, dy, distance float64) Comb
 		step := minFloat(1, distance-moved)
 		nextX := unit.X + dx*step
 		nextY := unit.Y + dy*step
-		if !unitInsideArena(*unit, nextX, nextY) || unitOverlapsTerrain(*unit, nextX, nextY, g.Battlemap.Terrains, TerrainImpassable) {
+		if !unitInsideBattlemap(*unit, nextX, nextY, g.Battlemap) || unitOverlapsTerrain(*unit, nextX, nextY, g.Battlemap.Terrains, TerrainImpassable) {
 			result.StoppedBy = "obstacle_or_arena"
 			break
 		}
@@ -679,13 +744,13 @@ func (e *Engine) applyMove(g *Game, unit *Unit, act *Activation, req ActionReque
 		step := minFloat(1, req.DistanceMM-moved)
 		nextX := unit.X + dx*step
 		nextY := unit.Y + dy*step
-		if unitOverlapsTerrain(*unit, nextX, nextY, g.Battlemap.Terrains, TerrainImpassable) {
+		if !unitInsideBattlemap(*unit, nextX, nextY, g.Battlemap) || unitOverlapsTerrain(*unit, nextX, nextY, g.Battlemap.Terrains, TerrainImpassable) {
 			break
 		}
 		if enemy := firstContactingEnemy(*unit, nextX, nextY, g.Units); enemy != nil {
 			face := contactedFace(*enemy, *unit, nextX, nextY)
 			defenderFortified := movedIntoCombatAcrossPassableObstacle(*unit, startX, startY, nextX, nextY, *enemy, g.Battlemap.Terrains)
-			if !snapAttackerFlush(unit, *enemy, face, g.Battlemap.Terrains, g.Units) {
+			if !snapAttackerFlush(unit, *enemy, face, g.Battlemap, g.Units) {
 				return MoveResult{Status: "blocked_combat_alignment", DistanceMM: moved, DefenderUnitID: enemy.ID, DefenderFace: face}, nil
 			}
 			engagement := CombatEngagement{
@@ -852,7 +917,7 @@ func contactedFace(defender, attacker Unit, attackerX, attackerY float64) string
 	return CombatFaceLeft
 }
 
-func snapAttackerFlush(attacker *Unit, defender Unit, defenderFace string, terrains []TerrainZone, units []Unit) bool {
+func snapAttackerFlush(attacker *Unit, defender Unit, defenderFace string, battlemap Battlemap, units []Unit) bool {
 	officer, err := pivotAnchor(attacker, "")
 	if err != nil {
 		return false
@@ -870,7 +935,7 @@ func snapAttackerFlush(attacker *Unit, defender Unit, defenderFace string, terra
 	for offset := 0.0; offset <= 100; offset++ {
 		attacker.X = officerX - relX - normalX*offset
 		attacker.Y = officerY - relY - normalY*offset
-		if combatPoseValid(*attacker, defender.ID, terrains, units) {
+		if combatPoseValid(*attacker, defender.ID, battlemap, units) {
 			return true
 		}
 	}
@@ -913,8 +978,8 @@ func attackerFacingForDefenderFace(defenderFacing int, face string) int {
 	}
 }
 
-func combatPoseValid(unit Unit, defenderID string, terrains []TerrainZone, units []Unit) bool {
-	if !unitInsideArena(unit, unit.X, unit.Y) || unitOverlapsTerrain(unit, unit.X, unit.Y, terrains, TerrainImpassable) {
+func combatPoseValid(unit Unit, defenderID string, battlemap Battlemap, units []Unit) bool {
+	if !unitInsideBattlemap(unit, unit.X, unit.Y, battlemap) || unitOverlapsTerrain(unit, unit.X, unit.Y, battlemap.Terrains, TerrainImpassable) {
 		return false
 	}
 	for _, other := range units {
@@ -1478,11 +1543,11 @@ func applyPivot(unit *Unit, anchor Mini, facingDeg int, terrains []TerrainZone, 
 	}
 }
 
-func validateUnitPosition(unit Unit, terrains []TerrainZone, units []Unit) error {
-	if !unitInsideArena(unit, unit.X, unit.Y) {
+func validateUnitPosition(unit Unit, battlemap Battlemap, units []Unit) error {
+	if !unitInsideBattlemap(unit, unit.X, unit.Y, battlemap) {
 		return errors.New("action must keep the whole unit in the arena")
 	}
-	if unitOverlapsTerrain(unit, unit.X, unit.Y, terrains, TerrainImpassable) {
+	if unitOverlapsTerrain(unit, unit.X, unit.Y, battlemap.Terrains, TerrainImpassable) {
 		return errors.New("action overlaps impassable terrain")
 	}
 	if unitOverlapsAnyUnit(unit, unit.X, unit.Y, units) {
@@ -1543,6 +1608,7 @@ func NormalizeGame(g *Game) {
 	if g == nil {
 		return
 	}
+	NormalizeBattlemap(&g.Battlemap)
 	if g.Engagements == nil {
 		g.Engagements = []CombatEngagement{}
 	}
@@ -1857,14 +1923,16 @@ func revertToBeforeFriendlyOverlap(unit *Unit, req ActionRequest, terrains []Ter
 	return maxMoved
 }
 
-func unitInsideArena(unit Unit, x, y float64) bool {
+func unitInsideBattlemap(unit Unit, x, y float64, battlemap Battlemap) bool {
+	NormalizeBattlemap(&battlemap)
 	box := unitBoundsAt(unit, x, y)
-	return box.minX >= 0 && box.minY >= 0 && box.maxX <= ArenaWidthMM && box.maxY <= ArenaHeightMM
+	return box.minX >= 0 && box.minY >= 0 && box.maxX <= battlemap.WidthMM && box.maxY <= battlemap.HeightMM
 }
 
-func facingTowardArenaCenter(x, y float64) int {
-	dx := float64(ArenaWidthMM)/2 - x
-	dy := float64(ArenaHeightMM)/2 - y
+func facingTowardBattlemapCenter(battlemap Battlemap, x, y float64) int {
+	NormalizeBattlemap(&battlemap)
+	dx := battlemap.WidthMM/2 - x
+	dy := battlemap.HeightMM/2 - y
 	deg := math.Atan2(dx, -dy) * 180 / math.Pi
 	return normalizeDeg(int(math.Round(deg/45) * 45))
 }

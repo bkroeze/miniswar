@@ -37,6 +37,10 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := s.SeedBattlemaps(); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err := s.ImportCatalog(projectPath("data/units.json")); err != nil {
 		db.Close()
 		return nil, err
@@ -80,6 +84,16 @@ create table if not exists snapshots (
   state_json text not null,
   created_at text not null,
   primary key (game_id, action_index)
+);
+create table if not exists battlemaps (
+  id text primary key,
+  name text not null,
+  width_mm real not null,
+  height_mm real not null,
+  terrain_json text not null,
+  is_builtin integer not null default 0,
+  created_at text not null,
+  updated_at text not null
 );
 create table if not exists catalog_units (
   id text primary key,

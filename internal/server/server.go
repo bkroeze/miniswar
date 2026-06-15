@@ -38,6 +38,11 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 	mux.HandleFunc("GET /api/catalog/units", s.catalogUnits)
 	mux.HandleFunc("GET /api/catalog/filters", s.catalogFilters)
+	mux.HandleFunc("GET /api/battlemaps", s.listBattlemaps)
+	mux.HandleFunc("POST /api/battlemaps", s.createBattlemap)
+	mux.HandleFunc("GET /api/battlemaps/{id}", s.getBattlemap)
+	mux.HandleFunc("PATCH /api/battlemaps/{id}", s.updateBattlemap)
+	mux.HandleFunc("DELETE /api/battlemaps/{id}", s.deleteBattlemap)
 	mux.HandleFunc("GET /api/army-templates", s.listArmyTemplates)
 	mux.HandleFunc("POST /api/army-templates", s.createArmyTemplate)
 	mux.HandleFunc("GET /api/army-templates/{id}", s.getArmyTemplate)
@@ -93,6 +98,23 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req.Player2Units = units
+	}
+	battlemapID := req.BattlemapID
+	if battlemapID == "" && req.Battlemap.ID == "" {
+		battlemapID = "old_road"
+	}
+	if req.Battlemap.ID == "" {
+		battlemap, err := s.store.GetBattlemap(battlemapID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				writeErrorMessage(w, http.StatusBadRequest, missingResource("battlemap", battlemapID))
+				return
+			}
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		req.Battlemap = battlemap
+		req.BattlemapID = battlemap.ID
 	}
 	g, err := s.engine.NewGame(req)
 	if err != nil {
@@ -290,6 +312,72 @@ func (s *Server) catalogFilters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "filters": filters, "messages": []string{}})
+}
+
+func (s *Server) listBattlemaps(w http.ResponseWriter, r *http.Request) {
+	battlemaps, err := s.store.ListBattlemaps()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "battlemaps": battlemaps, "messages": []string{}})
+}
+
+func (s *Server) createBattlemap(w http.ResponseWriter, r *http.Request) {
+	var req game.Battlemap
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	battlemap, err := s.store.CreateBattlemap(req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"ok": true, "battlemap": battlemap, "messages": []string{"Battlemap created."}})
+}
+
+func (s *Server) getBattlemap(w http.ResponseWriter, r *http.Request) {
+	battlemap, err := s.store.GetBattlemap(r.PathValue("id"))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusNotFound, missingResource("battlemap", r.PathValue("id")))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "battlemap": battlemap, "messages": []string{}})
+}
+
+func (s *Server) updateBattlemap(w http.ResponseWriter, r *http.Request) {
+	var req game.Battlemap
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	battlemap, err := s.store.UpdateBattlemap(r.PathValue("id"), req)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusNotFound, missingResource("battlemap", r.PathValue("id")))
+			return
+		}
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "battlemap": battlemap, "messages": []string{"Battlemap updated."}})
+}
+
+func (s *Server) deleteBattlemap(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.DeleteBattlemap(r.PathValue("id")); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusNotFound, missingResource("battlemap", r.PathValue("id")))
+			return
+		}
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "messages": []string{"Battlemap removed."}})
 }
 
 func (s *Server) listArmyTemplates(w http.ResponseWriter, r *http.Request) {

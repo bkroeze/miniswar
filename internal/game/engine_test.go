@@ -550,6 +550,22 @@ func TestCombatChoicePushbackMovesLoserAndClosesEngagement(t *testing.T) {
 	}
 }
 
+func TestCombatChoiceMovementStopsAtBattlemapEdge(t *testing.T) {
+	engine := NewEngine(37)
+	g := combatChoiceGame()
+	g.Battlemap = Battlemap{ID: "small", Name: "Small", WidthMM: 760, HeightMM: 520}
+	g.Units[1].Y = 10
+
+	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback25})
+	if err != nil {
+		t.Fatal(err)
+	}
+	choiceResult := rec.Result.(map[string]any)["combatChoice"].(CombatChoiceResult)
+	if choiceResult.MovedDistanceMM != 10 || choiceResult.StoppedBy != "obstacle_or_arena" {
+		t.Fatalf("choice movement = %+v, want 10mm stopped by arena edge", choiceResult)
+	}
+}
+
 func TestCombatChoiceWithdrawMovesWinnerAndRejectsWrongUnit(t *testing.T) {
 	engine := NewEngine(38)
 	g := combatChoiceGame()
@@ -625,7 +641,8 @@ func TestBlockedCombatAlignmentRestoresFacing(t *testing.T) {
 		Height: 520,
 	}}
 
-	if snapAttackerFlush(&attacker, defender, CombatFaceFront, terrains, []Unit{attacker, defender}) {
+	battlemap := Battlemap{Name: "Blocked", WidthMM: 760, HeightMM: 520, Terrains: terrains}
+	if snapAttackerFlush(&attacker, defender, CombatFaceFront, battlemap, []Unit{attacker, defender}) {
 		t.Fatal("expected combat alignment to be blocked")
 	}
 	if attacker.FacingDeg != 90 {
@@ -893,6 +910,63 @@ func TestNewGameSelectsBattlemapAndKeepsPlacementsOffImpassable(t *testing.T) {
 	}
 }
 
+func TestBattlemapValidationRejectsInvalidTerrain(t *testing.T) {
+	err := ValidateBattlemap(Battlemap{
+		ID:       "bad-map",
+		Name:     "Bad Map",
+		WidthMM:  100,
+		HeightMM: 100,
+		Terrains: []TerrainZone{{
+			ID:     "bad-zone",
+			Type:   TerrainRough,
+			Shape:  "rect",
+			X:      75,
+			Y:      75,
+			Width:  50,
+			Height: 50,
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected out-of-bounds terrain validation error")
+	}
+}
+
+func TestRestoreNormalizesLegacyBattlemapDimensions(t *testing.T) {
+	g, err := Restore(`{"id":"legacy","battlemap":{"id":"old_road","name":"Old Road","terrains":[]}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.Battlemap.WidthMM != ArenaWidthMM || g.Battlemap.HeightMM != ArenaHeightMM {
+		t.Fatalf("legacy battlemap dimensions = %.0fx%.0f, want %.0fx%.0f", g.Battlemap.WidthMM, g.Battlemap.HeightMM, float64(ArenaWidthMM), float64(ArenaHeightMM))
+	}
+	if len(g.Battlemap.Terrains) != 0 {
+		t.Fatalf("legacy terrain slice = %#v, want empty slice", g.Battlemap.Terrains)
+	}
+}
+
+func TestPlaceUnitUsesCustomBattlemapBoundsAndCenter(t *testing.T) {
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{
+		Battlemap: Battlemap{ID: "wide", Name: "Wide", WidthMM: 1200, HeightMM: 520},
+		Player1:   UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+		Player2:   UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.ActivePlayer = 1
+	if _, err := engine.PlaceUnit(g, PlacementRequest{PlayerID: 1, UnitID: "u1", X: 1000, Y: 260}); err != nil {
+		t.Fatal(err)
+	}
+	unit, _ := findUnit(g, "u1")
+	if unit.FacingDeg != 270 {
+		t.Fatalf("custom center facing = %d, want 270 toward x=600", unit.FacingDeg)
+	}
+	if _, err := engine.PlaceUnit(g, PlacementRequest{PlayerID: 2, UnitID: "u2", X: 1210, Y: 260}); err == nil {
+		t.Fatal("expected placement outside custom battlemap to fail")
+	}
+}
+
 func TestPlaceUnitCentersOfficerAndAlternatesPlayers(t *testing.T) {
 	engine := NewEngine(1)
 	g, err := engine.NewGame(Setup{
@@ -1040,6 +1114,58 @@ func TestMovementStopsBeforeImpassableOverlap(t *testing.T) {
 	}
 	if moved != 50 || unit.Y != 50 {
 		t.Fatalf("got moved %.0f y %.0f, want moved 50 y 50", moved, unit.Y)
+	}
+}
+
+func TestMovementUsesCustomBattlemapBounds(t *testing.T) {
+	engine := NewEngine(1)
+	unit := oneMiniUnit("u1", 1, 1075, 100, 90)
+	g := &Game{
+		Round:             1,
+		Phase:             "activated",
+		ActivePlayer:      1,
+		Battlemap:         Battlemap{ID: "wide", Name: "Wide", WidthMM: 1200, HeightMM: 520},
+		Units:             []Unit{unit},
+		CurrentActivation: &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 2},
+	}
+	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionMove, Direction: "forward", DistanceMM: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := rec.Result.(map[string]any)
+	movement := result["movement"].(MoveResult)
+	if movement.DistanceMM != 100 {
+		t.Fatalf("moved %.0fmm, want full movement beyond old arena width", movement.DistanceMM)
+	}
+	movedUnit, _ := findUnit(g, "u1")
+	if movedUnit.X != 1175 {
+		t.Fatalf("unit x = %.0f, want 1175", movedUnit.X)
+	}
+}
+
+func TestMovementStopsAtCustomBattlemapEdge(t *testing.T) {
+	engine := NewEngine(1)
+	unit := oneMiniUnit("u1", 1, 1175, 100, 90)
+	g := &Game{
+		Round:             1,
+		Phase:             "activated",
+		ActivePlayer:      1,
+		Battlemap:         Battlemap{ID: "wide", Name: "Wide", WidthMM: 1200, HeightMM: 520},
+		Units:             []Unit{unit},
+		CurrentActivation: &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 2},
+	}
+	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionMove, Direction: "forward", DistanceMM: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := rec.Result.(map[string]any)
+	movement := result["movement"].(MoveResult)
+	if movement.DistanceMM != 25 {
+		t.Fatalf("moved %.0fmm, want stop at custom edge after 25mm", movement.DistanceMM)
+	}
+	movedUnit, _ := findUnit(g, "u1")
+	if movedUnit.X != 1200 {
+		t.Fatalf("unit x = %.0f, want 1200", movedUnit.X)
 	}
 }
 

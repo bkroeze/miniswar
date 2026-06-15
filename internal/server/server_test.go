@@ -240,6 +240,141 @@ func TestListGamesReturnsSummaries(t *testing.T) {
 	}
 }
 
+func TestBattlemapHTTPCRUDAndValidation(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	srv := New(st, game.NewEngine(1)).Routes()
+	res := request(t, srv, http.MethodGet, "/api/battlemaps", "")
+	if res.Code != http.StatusOK {
+		t.Fatalf("list status %d: %s", res.Code, res.Body.String())
+	}
+	var listed struct {
+		OK         bool             `json:"ok"`
+		Battlemaps []game.Battlemap `json:"battlemaps"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Battlemaps) < 2 {
+		t.Fatalf("listed battlemaps = %d, want seeded maps", len(listed.Battlemaps))
+	}
+
+	body := `{"name":"Big Field","widthMm":1200,"heightMm":800,"terrains":[{"id":"rough-1","type":"rough","label":"rough","shape":"rect","x":100,"y":100,"width":200,"height":100}]}`
+	res = request(t, srv, http.MethodPost, "/api/battlemaps", body)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("create status %d: %s", res.Code, res.Body.String())
+	}
+	var created struct {
+		OK        bool           `json:"ok"`
+		Battlemap game.Battlemap `json:"battlemap"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.Battlemap.ID == "" || created.Battlemap.WidthMM != 1200 || len(created.Battlemap.Terrains) != 1 {
+		t.Fatalf("created battlemap = %#v", created.Battlemap)
+	}
+
+	updateBody := `{"name":"Bigger Field","widthMm":1400,"heightMm":900,"terrains":[{"id":"wall-1","type":"impassable","label":"wall","shape":"rect","x":300,"y":100,"width":40,"height":300}]}`
+	res = request(t, srv, http.MethodPatch, "/api/battlemaps/"+created.Battlemap.ID, updateBody)
+	if res.Code != http.StatusOK {
+		t.Fatalf("update status %d: %s", res.Code, res.Body.String())
+	}
+	var updated struct {
+		Battlemap game.Battlemap `json:"battlemap"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Battlemap.Name != "Bigger Field" || updated.Battlemap.Terrains[0].Type != game.TerrainImpassable {
+		t.Fatalf("updated battlemap = %#v", updated.Battlemap)
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/battlemaps", `{"name":"Bad","widthMm":100,"heightMm":100,"terrains":[{"id":"bad","type":"rough","shape":"rect","x":90,"y":90,"width":20,"height":20}]}`)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("invalid create status %d: %s", res.Code, res.Body.String())
+	}
+
+	res = request(t, srv, http.MethodDelete, "/api/battlemaps/"+created.Battlemap.ID, "")
+	if res.Code != http.StatusOK {
+		t.Fatalf("delete status %d: %s", res.Code, res.Body.String())
+	}
+	res = request(t, srv, http.MethodGet, "/api/battlemaps/"+created.Battlemap.ID, "")
+	if res.Code != http.StatusNotFound {
+		t.Fatalf("get deleted status %d: %s", res.Code, res.Body.String())
+	}
+
+	res = request(t, srv, http.MethodDelete, "/api/battlemaps/old_road", "")
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("delete built-in status %d: %s", res.Code, res.Body.String())
+	}
+}
+
+func TestCreateGameCopiesSavedBattlemap(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	battlemap, err := st.CreateBattlemap(game.Battlemap{
+		Name:     "Wide Field",
+		WidthMM:  1200,
+		HeightMM: 520,
+		Terrains: []game.TerrainZone{{
+			ID:     "rough-1",
+			Type:   game.TerrainRough,
+			Label:  "rough",
+			Shape:  "rect",
+			X:      100,
+			Y:      100,
+			Width:  100,
+			Height: 100,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(st, game.NewEngine(1)).Routes()
+	createBody := `{"battlemapId":"` + battlemap.ID + `","player1Units":[{"baseWidthMm":25,"baseDepthMm":25,"count":5}],"player2Units":[{"baseWidthMm":25,"baseDepthMm":25,"count":5}]}`
+	res := request(t, srv, http.MethodPost, "/api/games", createBody)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("create status %d: %s", res.Code, res.Body.String())
+	}
+	var created game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.Game.Battlemap.ID != battlemap.ID || created.Game.Battlemap.WidthMM != 1200 || len(created.Game.Battlemap.Terrains) != 1 {
+		t.Fatalf("game copied battlemap = %#v", created.Game.Battlemap)
+	}
+
+	if _, err := st.UpdateBattlemap(battlemap.ID, game.Battlemap{Name: "Changed", WidthMM: 1400, HeightMM: 520}); err != nil {
+		t.Fatal(err)
+	}
+	reloaded := getGame(t, srv, created.Game.ID)
+	if reloaded.Battlemap.Name != "Wide Field" || reloaded.Battlemap.WidthMM != 1200 || len(reloaded.Battlemap.Terrains) != 1 {
+		t.Fatalf("game battlemap mutated after library edit: %#v", reloaded.Battlemap)
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+created.Game.ID+"/rewind", `{"actionIndex":-1}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("rewind status %d: %s", res.Code, res.Body.String())
+	}
+	var rewound game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &rewound); err != nil {
+		t.Fatal(err)
+	}
+	if rewound.Game.Battlemap.Name != "Wide Field" || rewound.Game.Battlemap.WidthMM != 1200 {
+		t.Fatalf("rewind did not restore copied battlemap: %#v", rewound.Game.Battlemap)
+	}
+}
+
 func TestCreateGameFromSavedArmies(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
 	if err != nil {

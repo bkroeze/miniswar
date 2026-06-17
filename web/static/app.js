@@ -8,7 +8,7 @@ function createMiniswarApp() {
     setupSidebarCollapsed: false,
     newGameConfigOpen: false,
     loadGamesOpen: false,
-    battlemapEditorOpen: false,
+    displayMode: "landing",
     savedGames: [],
     savedGamesLoading: false,
     armies: [],
@@ -38,7 +38,37 @@ function createMiniswarApp() {
 
     async initGame() {
       await Promise.all([this.loadBattlemaps(), this.loadArmies({ defaultSelections: true })]);
-      this.openNewGameConfig();
+      this.ensureCameraForCurrentMap();
+    },
+
+    async initBattlemapsPage() {
+      this.displayMode = "battlemaps";
+      await this.loadBattlemaps();
+      const first = this.battlemaps.find((battlemap) => battlemap.id === this.setup.battlemapId) || this.battlemaps[0];
+      if (first) this.selectBattlemapForEdit(first.id);
+      else this.newBattlemap();
+    },
+
+    showLanding() {
+      return this.displayMode === "landing";
+    },
+
+    enterGameDisplay() {
+      this.displayMode = "game";
+    },
+
+    async showNewGameConfig() {
+      this.enterGameDisplay();
+      await this.openNewGameConfig();
+    },
+
+    async showLoadGames() {
+      this.enterGameDisplay();
+      await this.openLoadGames();
+    },
+
+    async showBattlemapEditor() {
+      window.location.href = "/battlemaps";
     },
 
     async openNewGameConfig() {
@@ -128,20 +158,6 @@ function createMiniswarApp() {
 
     closeLoadGames() {
       this.loadGamesOpen = false;
-    },
-
-    async openBattlemapEditor() {
-      await this.loadBattlemaps();
-      this.battlemapEditorOpen = true;
-      if (!this.editorBattlemap) {
-        const first = this.battlemaps.find((battlemap) => battlemap.id === this.setup.battlemapId) || this.battlemaps[0];
-        if (first) this.selectBattlemapForEdit(first.id);
-        else this.newBattlemap();
-      }
-    },
-
-    closeBattlemapEditor() {
-      this.battlemapEditorOpen = false;
     },
 
     cloneBattlemap(battlemap) {
@@ -544,6 +560,7 @@ function createMiniswarApp() {
     },
 
     statusLine() {
+      if (this.showLanding()) return "Choose how to begin";
       if (!this.game) return "Loading";
       if (this.game.phase === "complete") {
         return this.game.winnerPlayerId ? `Game complete: player ${this.game.winnerPlayerId} wins` : "Game complete: draw";

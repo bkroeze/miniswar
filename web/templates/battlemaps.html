@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Battlemaps - Miniswar</title>
+  <link rel="stylesheet" href="/static/app.css?v=landing-20260617">
+  <script defer src="/static/app.js?v=landing-20260617"></script>
+  <script defer src="/static/alpine.min.js"></script>
+</head>
+<body x-data="miniswar" x-init="initBattlemapsPage()">
+  <header class="topbar">
+    <div>
+      <h1>Battlemaps</h1>
+      <p>Edit reusable maps and terrain for new games.</p>
+    </div>
+    <div class="topbar-actions">
+      <a class="button-link" href="/">Game</a>
+      <a class="button-link" href="/armies">Armies</a>
+      <button type="button" @click="newBattlemap()">New Battlemap</button>
+    </div>
+  </header>
+
+  <main class="battlemaps-shell">
+    <aside class="battlemap-list">
+      <h2>Maps</h2>
+      <template x-for="battlemap in battlemaps" :key="battlemap.id">
+        <button type="button" :aria-label="`Edit ${battlemap.name}`" :class="{ selected: editorBattlemap?.id === battlemap.id }" @click="selectBattlemapForEdit(battlemap.id)">
+          <span x-text="battlemap.name"></span>
+          <small x-text="`${Math.round(battlemap.widthMm)}x${Math.round(battlemap.heightMm)}mm${battlemap.isBuiltin ? ' built-in' : ''}`"></small>
+        </button>
+      </template>
+    </aside>
+
+    <template x-if="editorBattlemap">
+      <section class="battlemap-form">
+        <div class="setup-grid compact">
+          <label>Name
+            <input type="text" x-model="editorBattlemap.name">
+          </label>
+          <label>Width mm
+            <input type="number" min="1" x-model.number="editorBattlemap.widthMm">
+          </label>
+          <label>Height mm
+            <input type="number" min="1" x-model.number="editorBattlemap.heightMm">
+          </label>
+        </div>
+
+        <div class="battlemap-preview-row">
+          <svg class="battlemap-preview" x-bind:view-box.camel="editorViewBox()" role="img" aria-label="Battlemap editor preview">
+            <defs>
+              <pattern id="editor-grid" width="25" height="25" patternUnits="userSpaceOnUse">
+                <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#d7d0c2" stroke-width="1"/>
+              </pattern>
+            </defs>
+            <rect :width="editorBattlemap?.widthMm || 760" :height="editorBattlemap?.heightMm || 520" fill="#f4efe4"></rect>
+            <rect :width="editorBattlemap?.widthMm || 760" :height="editorBattlemap?.heightMm || 520" fill="url(#editor-grid)"></rect>
+            <template x-for="terrain in editorBattlemap?.terrains || []" :key="terrain.id">
+              <g @click="selectedTerrainId = terrain.id">
+                <rect :x="terrain.x" :y="terrain.y" :width="terrain.width" :height="terrain.height" :class="`terrain ${terrain.type} ${selectedTerrainId === terrain.id ? 'selected' : ''}`"></rect>
+                <text :x="terrain.x + terrain.width / 2" :y="terrain.y + terrain.height / 2 + 4" text-anchor="middle" :class="`terrain-label ${terrain.type}`" x-text="terrain.label"></text>
+              </g>
+            </template>
+          </svg>
+
+          <div class="terrain-tools">
+            <div class="modal-actions">
+              <button type="button" @click="addEditorTerrain()">Add Terrain</button>
+              <button type="button" @click="deleteEditorTerrain()" :disabled="!selectedTerrain()">Delete Terrain</button>
+            </div>
+            <template x-if="selectedTerrain()">
+              <div class="terrain-form">
+                <label>Type
+                  <select x-model="selectedTerrain().type">
+                    <option value="path">path</option>
+                    <option value="rough">rough</option>
+                    <option value="impassable">impassable</option>
+                    <option value="passable_obstacle">passable obstacle</option>
+                  </select>
+                </label>
+                <label>Label
+                  <input type="text" x-model="selectedTerrain().label">
+                </label>
+                <label>X
+                  <input type="number" x-model.number="selectedTerrain().x">
+                </label>
+                <label>Y
+                  <input type="number" x-model.number="selectedTerrain().y">
+                </label>
+                <label>Width
+                  <input type="number" min="1" x-model.number="selectedTerrain().width">
+                </label>
+                <label>Height
+                  <input type="number" min="1" x-model.number="selectedTerrain().height">
+                </label>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" @click="deleteEditorBattlemap()" :disabled="!editorBattlemap?.id || editorBattlemap?.isBuiltin">Delete Map</button>
+          <button type="button" @click="saveEditorBattlemap()" :disabled="editorBattlemap?.isBuiltin">Save Map</button>
+        </div>
+      </section>
+    </template>
+  </main>
+</body>
+</html>

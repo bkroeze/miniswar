@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Miniswar</title>
-  <link rel="stylesheet" href="/static/app.css">
-  <script defer src="/static/app.js"></script>
+  <link rel="stylesheet" href="/static/app.css?v=landing-20260617">
+  <script defer src="/static/app.js?v=landing-20260617"></script>
   <script defer src="/static/alpine.min.js"></script>
 </head>
 <body x-data="miniswar" x-init="initGame()">
@@ -16,13 +16,39 @@
     </div>
     <div class="topbar-actions">
       <a class="button-link" href="/armies">Armies</a>
-      <button type="button" @click="openBattlemapEditor()">Battlemaps</button>
-      <button type="button" @click="openLoadGames()">Load Game</button>
-      <button type="button" @click="openNewGameConfig()">New Game</button>
+      <a class="button-link" href="/battlemaps">Battlemaps</a>
+      <button type="button" @click="showLoadGames()">Load Game</button>
+      <button type="button" @click="showNewGameConfig()">New Game</button>
     </div>
   </header>
 
-  <main class="shell" :class="{ 'setup-active': isSetupPhase(), 'setup-collapsed': setupSidebarCollapsed }">
+  <main class="landing-page" x-show="showLanding()" x-cloak>
+    <section class="landing-copy" aria-labelledby="landing-title">
+      <h1 id="landing-title">Miniswar</h1>
+      <p>Run tabletop fights on SVG battlemaps with rewindable state, structured feedback, and automation-ready actions.</p>
+      <div class="landing-actions">
+        <a class="landing-action" href="/armies">
+          <span class="landing-action-button">Armies</span>
+          <span>Build and maintain army rosters before they enter the arena.</span>
+        </a>
+        <a class="landing-action" href="/battlemaps">
+          <span class="landing-action-button">Battlemaps</span>
+          <span>Create or edit the maps and terrain used by new games.</span>
+        </a>
+        <button class="landing-action" type="button" @click="showLoadGames()">
+          <span class="landing-action-button">Load Game</span>
+          <span>Resume a saved fight with its action history and snapshots intact.</span>
+        </button>
+        <button class="landing-action primary" type="button" @click="showNewGameConfig()">
+          <span class="landing-action-button">New Game</span>
+          <span>Start a new game from an existing battlemap and chosen armies.</span>
+        </button>
+      </div>
+    </section>
+    <section class="landing-art" aria-label="Miniswar hero artwork"></section>
+  </main>
+
+  <main class="shell" x-show="!showLanding()" x-cloak :class="{ 'setup-active': isSetupPhase(), 'setup-collapsed': setupSidebarCollapsed }">
     <section class="setup" :aria-label="setupSidebarCollapsed ? 'Setup collapsed' : 'Setup'">
       <button class="sidebar-toggle" type="button" @click="toggleSetupSidebar()" :aria-expanded="(!setupSidebarCollapsed).toString()" aria-controls="setup-sidebar-body">
         <span x-text="setupSidebarCollapsed ? '›' : '‹'"></span>
@@ -93,7 +119,7 @@
         <button type="button" @click="panCamera(0, -0.25)" aria-label="Pan up">↑</button>
         <button type="button" @click="panCamera(0, 0.25)" aria-label="Pan down">↓</button>
       </div>
-      <svg class="arena" :viewBox="arenaViewBox()" role="img" aria-label="Miniswar arena" @click.capture="arenaClicked($event)" @wheel.prevent="arenaWheel($event)">
+      <svg class="arena" x-bind:view-box.camel="arenaViewBox()" role="img" aria-label="Miniswar arena" @click.capture="arenaClicked($event)" @wheel.prevent="arenaWheel($event)">
         <defs>
           <pattern id="grid" width="25" height="25" patternUnits="userSpaceOnUse">
             <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#d7d0c2" stroke-width="1"/>
@@ -310,91 +336,5 @@
     </section>
   </div>
 
-  <div class="modal-backdrop" x-show="battlemapEditorOpen" @click.self="closeBattlemapEditor()" x-cloak>
-    <section class="modal battlemap-modal" role="dialog" aria-modal="true" aria-labelledby="battlemap-editor-title">
-      <div class="modal-header">
-        <h2 id="battlemap-editor-title">Battlemaps</h2>
-        <button type="button" @click="closeBattlemapEditor()" aria-label="Close battlemap editor">Close</button>
-      </div>
-      <div class="battlemap-editor">
-        <aside class="battlemap-list">
-          <button type="button" @click="newBattlemap()">New Battlemap</button>
-          <template x-for="battlemap in battlemaps" :key="battlemap.id">
-            <button type="button" :aria-label="`Edit ${battlemap.name}`" :class="{ selected: editorBattlemap?.id === battlemap.id }" @click="selectBattlemapForEdit(battlemap.id)">
-              <span x-text="battlemap.name"></span>
-              <small x-text="`${Math.round(battlemap.widthMm)}x${Math.round(battlemap.heightMm)}mm${battlemap.isBuiltin ? ' built-in' : ''}`"></small>
-            </button>
-          </template>
-        </aside>
-        <section class="battlemap-form" x-show="editorBattlemap">
-          <div class="setup-grid compact">
-            <label>Name
-              <input type="text" x-model="editorBattlemap.name">
-            </label>
-            <label>Width mm
-              <input type="number" min="1" x-model.number="editorBattlemap.widthMm">
-            </label>
-            <label>Height mm
-              <input type="number" min="1" x-model.number="editorBattlemap.heightMm">
-            </label>
-          </div>
-          <div class="battlemap-preview-row">
-            <svg class="battlemap-preview" :viewBox="editorViewBox()" role="img" aria-label="Battlemap editor preview">
-              <defs>
-                <pattern id="editor-grid" width="25" height="25" patternUnits="userSpaceOnUse">
-                  <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#d7d0c2" stroke-width="1"/>
-                </pattern>
-              </defs>
-              <rect :width="editorBattlemap?.widthMm || 760" :height="editorBattlemap?.heightMm || 520" fill="#f4efe4"></rect>
-              <rect :width="editorBattlemap?.widthMm || 760" :height="editorBattlemap?.heightMm || 520" fill="url(#editor-grid)"></rect>
-              <template x-for="terrain in editorBattlemap?.terrains || []" :key="terrain.id">
-                <g @click="selectedTerrainId = terrain.id">
-                  <rect :x="terrain.x" :y="terrain.y" :width="terrain.width" :height="terrain.height" :class="`terrain ${terrain.type} ${selectedTerrainId === terrain.id ? 'selected' : ''}`"></rect>
-                  <text :x="terrain.x + terrain.width / 2" :y="terrain.y + terrain.height / 2 + 4" text-anchor="middle" :class="`terrain-label ${terrain.type}`" x-text="terrain.label"></text>
-                </g>
-              </template>
-            </svg>
-            <div class="terrain-tools">
-              <div class="modal-actions">
-                <button type="button" @click="addEditorTerrain()">Add Terrain</button>
-                <button type="button" @click="deleteEditorTerrain()" :disabled="!selectedTerrain()">Delete Terrain</button>
-              </div>
-              <template x-if="selectedTerrain()">
-                <div class="terrain-form">
-                  <label>Type
-                    <select x-model="selectedTerrain().type">
-                      <option value="path">path</option>
-                      <option value="rough">rough</option>
-                      <option value="impassable">impassable</option>
-                      <option value="passable_obstacle">passable obstacle</option>
-                    </select>
-                  </label>
-                  <label>Label
-                    <input type="text" x-model="selectedTerrain().label">
-                  </label>
-                  <label>X
-                    <input type="number" x-model.number="selectedTerrain().x">
-                  </label>
-                  <label>Y
-                    <input type="number" x-model.number="selectedTerrain().y">
-                  </label>
-                  <label>Width
-                    <input type="number" min="1" x-model.number="selectedTerrain().width">
-                  </label>
-                  <label>Height
-                    <input type="number" min="1" x-model.number="selectedTerrain().height">
-                  </label>
-                </div>
-              </template>
-            </div>
-          </div>
-          <div class="modal-actions">
-            <button type="button" @click="deleteEditorBattlemap()" :disabled="!editorBattlemap?.id || editorBattlemap?.isBuiltin">Delete Map</button>
-            <button type="button" @click="saveEditorBattlemap()" :disabled="editorBattlemap?.isBuiltin">Save Map</button>
-          </div>
-        </section>
-      </div>
-    </section>
-  </div>
 </body>
 </html>

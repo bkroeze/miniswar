@@ -16,18 +16,20 @@ import (
 )
 
 type Server struct {
-	store      *store.Store
-	engine     *game.Engine
-	indexTmpl  *template.Template
-	armiesTmpl *template.Template
+	store          *store.Store
+	engine         *game.Engine
+	indexTmpl      *template.Template
+	armiesTmpl     *template.Template
+	battlemapsTmpl *template.Template
 }
 
 func New(store *store.Store, engine *game.Engine) *Server {
 	return &Server{
-		store:      store,
-		engine:     engine,
-		indexTmpl:  template.Must(template.ParseFiles(projectPath("web/templates/index.html"))),
-		armiesTmpl: template.Must(template.ParseFiles(projectPath("web/templates/armies.html"))),
+		store:          store,
+		engine:         engine,
+		indexTmpl:      template.Must(template.ParseFiles(projectPath("web/templates/index.html"))),
+		armiesTmpl:     template.Must(template.ParseFiles(projectPath("web/templates/armies.html"))),
+		battlemapsTmpl: template.Must(template.ParseFiles(projectPath("web/templates/battlemaps.html"))),
 	}
 }
 
@@ -35,6 +37,7 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", s.index)
 	mux.HandleFunc("GET /armies", s.armiesPage)
+	mux.HandleFunc("GET /battlemaps", s.battlemapsPage)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 	mux.HandleFunc("GET /api/catalog/units", s.catalogUnits)
 	mux.HandleFunc("GET /api/catalog/filters", s.catalogFilters)
@@ -77,6 +80,11 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 func (s *Server) armiesPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = s.armiesTmpl.Execute(w, nil)
+}
+
+func (s *Server) battlemapsPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = s.battlemapsTmpl.Execute(w, nil)
 }
 
 func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {

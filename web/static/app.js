@@ -728,7 +728,9 @@ function createMiniswarApp() {
     },
 
     facingTowardArenaCenter(x, y) {
-      const deg = (Math.atan2(380 - x, -(260 - y)) * 180) / Math.PI;
+      const centerX = this.battlemapWidth() / 2;
+      const centerY = this.battlemapHeight() / 2;
+      const deg = (Math.atan2(centerX - x, -(centerY - y)) * 180) / Math.PI;
       return ((Math.round(deg / 45) * 45) % 360 + 360) % 360;
     },
 

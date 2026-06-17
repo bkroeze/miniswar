@@ -359,21 +359,49 @@ func (s *Server) getBattlemap(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) updateBattlemap(w http.ResponseWriter, r *http.Request) {
-	var req game.Battlemap
+	var req battlemapPatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	battlemap, err := s.store.UpdateBattlemap(r.PathValue("id"), req)
+	battlemap, err := s.store.GetBattlemap(r.PathValue("id"))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeErrorMessage(w, http.StatusNotFound, missingResource("battlemap", r.PathValue("id")))
 			return
 		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	req.apply(&battlemap)
+	battlemap, err = s.store.UpdateBattlemap(r.PathValue("id"), battlemap)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "battlemap": battlemap, "messages": []string{"Battlemap updated."}})
+}
+
+type battlemapPatchRequest struct {
+	Name     *string             `json:"name"`
+	WidthMM  *float64            `json:"widthMm"`
+	HeightMM *float64            `json:"heightMm"`
+	Terrains *[]game.TerrainZone `json:"terrains"`
+}
+
+func (req battlemapPatchRequest) apply(battlemap *game.Battlemap) {
+	if req.Name != nil {
+		battlemap.Name = *req.Name
+	}
+	if req.WidthMM != nil {
+		battlemap.WidthMM = *req.WidthMM
+	}
+	if req.HeightMM != nil {
+		battlemap.HeightMM = *req.HeightMM
+	}
+	if req.Terrains != nil {
+		battlemap.Terrains = *req.Terrains
+	}
 }
 
 func (s *Server) deleteBattlemap(w http.ResponseWriter, r *http.Request) {

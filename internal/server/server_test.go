@@ -294,6 +294,20 @@ func TestBattlemapHTTPCRUDAndValidation(t *testing.T) {
 		t.Fatalf("updated battlemap = %#v", updated.Battlemap)
 	}
 
+	res = request(t, srv, http.MethodPatch, "/api/battlemaps/"+created.Battlemap.ID, `{"name":"Renamed Field"}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("partial update status %d: %s", res.Code, res.Body.String())
+	}
+	var partiallyUpdated struct {
+		Battlemap game.Battlemap `json:"battlemap"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &partiallyUpdated); err != nil {
+		t.Fatal(err)
+	}
+	if partiallyUpdated.Battlemap.Name != "Renamed Field" || partiallyUpdated.Battlemap.WidthMM != 1400 || partiallyUpdated.Battlemap.HeightMM != 900 || len(partiallyUpdated.Battlemap.Terrains) != 1 {
+		t.Fatalf("partial update reset battlemap geometry: %#v", partiallyUpdated.Battlemap)
+	}
+
 	res = request(t, srv, http.MethodPost, "/api/battlemaps", `{"name":"Bad","widthMm":100,"heightMm":100,"terrains":[{"id":"bad","type":"rough","shape":"rect","x":90,"y":90,"width":20,"height":20}]}`)
 	if res.Code != http.StatusBadRequest {
 		t.Fatalf("invalid create status %d: %s", res.Code, res.Body.String())

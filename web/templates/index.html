@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Miniswar</title>
-  <link rel="stylesheet" href="/static/app.css">
-  <script defer src="/static/app.js"></script>
+  <link rel="stylesheet" href="/static/app.css?v=landing-20260617">
+  <script defer src="/static/app.js?v=landing-20260617"></script>
   <script defer src="/static/alpine.min.js"></script>
 </head>
 <body x-data="miniswar" x-init="initGame()">
@@ -16,12 +16,39 @@
     </div>
     <div class="topbar-actions">
       <a class="button-link" href="/armies">Armies</a>
-      <button type="button" @click="openLoadGames()">Load Game</button>
-      <button type="button" @click="openNewGameConfig()">New Game</button>
+      <a class="button-link" href="/battlemaps">Battlemaps</a>
+      <button type="button" @click="showLoadGames()">Load Game</button>
+      <button type="button" @click="showNewGameConfig()">New Game</button>
     </div>
   </header>
 
-  <main class="shell" :class="{ 'setup-active': isSetupPhase(), 'setup-collapsed': setupSidebarCollapsed }">
+  <main class="landing-page" x-show="showLanding()" x-cloak>
+    <section class="landing-copy" aria-labelledby="landing-title">
+      <h1 id="landing-title">Miniswar</h1>
+      <p>Run tabletop fights on SVG battlemaps with rewindable state, structured feedback, and automation-ready actions.</p>
+      <div class="landing-actions">
+        <a class="landing-action" href="/armies">
+          <span class="landing-action-button">Armies</span>
+          <span>Build and maintain army rosters before they enter the arena.</span>
+        </a>
+        <a class="landing-action" href="/battlemaps">
+          <span class="landing-action-button">Battlemaps</span>
+          <span>Create or edit the maps and terrain used by new games.</span>
+        </a>
+        <button class="landing-action" type="button" @click="showLoadGames()">
+          <span class="landing-action-button">Load Game</span>
+          <span>Resume a saved fight with its action history and snapshots intact.</span>
+        </button>
+        <button class="landing-action primary" type="button" @click="showNewGameConfig()">
+          <span class="landing-action-button">New Game</span>
+          <span>Start a new game from an existing battlemap and chosen armies.</span>
+        </button>
+      </div>
+    </section>
+    <section class="landing-art" aria-label="Miniswar hero artwork"></section>
+  </main>
+
+  <main class="shell" x-show="!showLanding()" x-cloak :class="{ 'setup-active': isSetupPhase(), 'setup-collapsed': setupSidebarCollapsed }">
     <section class="setup" :aria-label="setupSidebarCollapsed ? 'Setup collapsed' : 'Setup'">
       <button class="sidebar-toggle" type="button" @click="toggleSetupSidebar()" :aria-expanded="(!setupSidebarCollapsed).toString()" aria-controls="setup-sidebar-body">
         <span x-text="setupSidebarCollapsed ? '›' : '‹'"></span>
@@ -83,14 +110,23 @@
         <button type="button" @click="confirmPlacement()" :disabled="!placementPreview">Confirm</button>
         <span class="placement-message" x-text="messages[0] || ''"></span>
       </div>
-      <svg class="arena" viewBox="0 0 760 520" role="img" aria-label="Miniswar arena" @click.capture="arenaClicked($event)">
+      <div class="arena-toolbar">
+        <button type="button" @click="fitCameraToMap()">Fit</button>
+        <button type="button" @click="zoomCamera(0.8)">+</button>
+        <button type="button" @click="zoomCamera(1.25)">-</button>
+        <button type="button" @click="panCamera(-0.25, 0)" aria-label="Pan left">←</button>
+        <button type="button" @click="panCamera(0.25, 0)" aria-label="Pan right">→</button>
+        <button type="button" @click="panCamera(0, -0.25)" aria-label="Pan up">↑</button>
+        <button type="button" @click="panCamera(0, 0.25)" aria-label="Pan down">↓</button>
+      </div>
+      <svg class="arena" x-bind:view-box.camel="arenaViewBox()" role="img" aria-label="Miniswar arena" @click.capture="arenaClicked($event)" @wheel.prevent="arenaWheel($event)">
         <defs>
           <pattern id="grid" width="25" height="25" patternUnits="userSpaceOnUse">
             <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#d7d0c2" stroke-width="1"/>
           </pattern>
         </defs>
-        <rect width="760" height="520" fill="#f4efe4"></rect>
-        <rect width="760" height="520" fill="url(#grid)"></rect>
+        <rect :width="battlemapWidth()" :height="battlemapHeight()" fill="#f4efe4"></rect>
+        <rect :width="battlemapWidth()" :height="battlemapHeight()" fill="url(#grid)"></rect>
         <g x-ref="terrain"></g>
         <g x-ref="units"></g>
       </svg>
@@ -159,9 +195,10 @@
         <button type="button" @click="closeNewGameConfig()" x-show="game" aria-label="Close new game setup">Close</button>
       </div>
       <label>Battlemap
-        <select x-model="setup.battlemapId">
-          <option value="old_road">Old Road</option>
-          <option value="forest_wall">Forest Wall</option>
+        <select x-model="setup.battlemapId" @change="fitCameraToMap(); renderArena()">
+          <template x-for="battlemap in battlemaps" :key="battlemap.id">
+            <option :value="battlemap.id" x-text="`${battlemap.name} (${Math.round(battlemap.widthMm)}x${Math.round(battlemap.heightMm)}mm)`"></option>
+          </template>
         </select>
       </label>
       <div class="setup-grid">
@@ -298,5 +335,6 @@
       </table>
     </section>
   </div>
+
 </body>
 </html>

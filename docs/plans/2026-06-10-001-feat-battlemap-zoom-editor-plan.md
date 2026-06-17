@@ -245,16 +245,16 @@ flowchart TB
 
 ## Risks and Mitigations
 
-- **Risk:** Hidden fixed-size assumptions remain in tests or helper functions.  
+- **Risk:** Hidden fixed-size assumptions remain in tests or helper functions.
   **Mitigation:** Add custom-dimension tests for placement, movement, combat alignment, pushback, withdraw, and default facing.
 
-- **Risk:** Editing reusable maps accidentally mutates in-progress games.  
+- **Risk:** Editing reusable maps accidentally mutates in-progress games.
   **Mitigation:** Keep the started game on copied battlemap JSON and test post-edit game reload plus rewind.
 
-- **Risk:** SVG camera math breaks click-to-world coordinates.  
+- **Risk:** SVG camera math breaks click-to-world coordinates.
   **Mitigation:** Use SVG viewBox for zoom/pan and keep `createSVGPoint()` coordinate conversion as the core click path.
 
-- **Risk:** The editor grows into a drawing application.  
+- **Risk:** The editor grows into a drawing application.
   **Mitigation:** Keep v1 controls rectangle-only and route richer authoring to follow-up work.
 
 ---

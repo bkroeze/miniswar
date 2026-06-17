@@ -144,8 +144,8 @@ Outside this first pass:
 ## Sources / Research
 
 - `AGENTS.md` establishes SQLite persistence, SVG-only arena rendering, millimeter coordinates, automation-friendly actions, and rewind as project constraints.
-- `PLAN.md` describes the current game state, JSON APIs, SVG arena, saved games, snapshots, and fixed built-in battlemaps.
-- `internal/game/types.go` currently defines battlemap and terrain data structures plus fixed arena dimensions.
-- `internal/game/engine.go` currently provides built-in battlemaps and uses fixed arena dimensions for rule validation.
-- `web/templates/index.html` currently renders the arena with a fixed SVG viewBox and hard-coded battlemap options.
+- At planning time, `PLAN.md` described game state, JSON APIs, SVG arena, saved games, snapshots, and fixed built-in battlemaps.
+- At planning time, `internal/game/types.go` defined battlemap and terrain data structures plus fixed arena dimensions.
+- At planning time, `internal/game/engine.go` provided built-in battlemaps and used fixed arena dimensions for rule validation.
+- At planning time, `web/templates/index.html` rendered the arena with a fixed SVG viewBox and hard-coded battlemap options.
 - `web/static/app.js` currently converts clicks through SVG coordinates and renders terrain zones from game state.

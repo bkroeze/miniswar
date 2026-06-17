@@ -280,9 +280,9 @@ flowchart TB
 
 - `docs/brainstorms/2026-06-10-battlemap-zoom-editor-requirements.md` defines the product scope, requirements, actors, flows, and acceptance examples.
 - `AGENTS.md` requires SQLite persistence, SVG-only play area rendering, millimeter coordinates, automation-friendly actions, and rewind support.
-- `PLAN.md` documents current game APIs, action feedback, SVG arena, battlemap IDs, and fixed built-in maps.
+- At planning time, `PLAN.md` documented game APIs, action feedback, SVG arena, battlemap IDs, and fixed built-in maps.
 - `internal/game/types.go` contains the current `Battlemap`, `TerrainZone`, `Game`, `APIResponse`, and request/summary types.
-- `internal/game/engine.go` contains built-in maps, fixed arena constants, placement, movement, combat movement, snapshots, restore, and normalization.
+- `internal/game/engine.go` contains built-in maps, battlemap bounds handling, placement, movement, combat movement, snapshots, restore, and normalization.
 - `internal/store/store.go` and `internal/store/armies.go` show migration, JSON persistence, seeded catalog import, and CRUD conventions.
 - `internal/server/server.go` shows route registration, JSON error conventions, game creation, mutation persistence, and army/template CRUD patterns.
-- `web/templates/index.html`, `web/static/app.js`, and `web/static/app.css` contain the fixed SVG arena, hard-coded battlemap selector, Alpine state, click-to-SVG coordinate conversion, terrain rendering, and existing management UI patterns.
+- At planning time, `web/templates/index.html`, `web/static/app.js`, and `web/static/app.css` contained the fixed SVG arena, hard-coded battlemap selector, Alpine state, click-to-SVG coordinate conversion, terrain rendering, and existing management UI patterns.

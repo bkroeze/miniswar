@@ -2,14 +2,14 @@
 
 ## Summary
 
-Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game actions, army and roster management, and an SVG arena UI driven by Alpine.js. The current app supports catalog-backed armies, templates, multi-unit setup, activation rolls, alternating activations, movement actions, move-into-combat resolution, morale, pushback choices, action history, and rewind.
+Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game actions, army and roster management, reusable battlemaps, and an SVG arena UI driven by Alpine.js. The current app supports catalog-backed armies, templates, multi-unit setup, activation rolls, alternating activations, movement actions, move-into-combat resolution, morale, pushback choices, action history, and rewind.
 
 ## Key Changes
 
 - `cmd/miniswar` starts the HTTP server with `-addr` and `-db` flags.
 - `internal/game` owns rules, state transitions, layouts, activation, movement, combat, morale, legal actions, and rewind snapshots.
 - `internal/store` persists games, snapshots, the imported unit catalog, army templates, and army rosters in SQLite.
-- `web` serves HTML, CSS, Alpine.js, and SVG rendering.
+- `web` serves the landing page, management pages, CSS, Alpine.js, and SVG rendering.
 - The store imports `data/units.json` into `catalog_units` and `catalog_unit_terrains` when it opens.
 - The arena is rendered entirely in SVG using millimeter coordinates. Minis are rectangles sized by base dimensions, with unit/player color, facing indicator, mini key, officer marking, status styling, and engagement styling.
 - Battlemaps are saved in SQLite with dimensions and rectangular terrain zones. The browser includes a battlemap editor, and active games copy the chosen map definition so later library edits do not mutate saved or rewindable game state.
@@ -19,8 +19,9 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
 ## Public Interfaces
 
 - Browser routes:
-  - `GET /` renders the game shell.
+  - `GET /` renders the landing page and game shell.
   - `GET /armies` renders the army template and roster manager.
+  - `GET /battlemaps` renders the reusable battlemap library and rectangular terrain editor.
   - `GET /static/*` serves CSS, JavaScript, and Alpine.js.
 - Catalog API:
   - `GET /api/catalog/units?nation=&terrain=` returns catalog units, optionally filtered by exact nation and terrain.
@@ -44,7 +45,7 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
   - `DELETE /api/armies/{id}/units/{unitID}` removes a roster unit.
 - Battlemap API:
   - `GET /api/battlemaps` lists saved battlemaps.
-  - `POST /api/battlemaps` creates a battlemap from `{ "name": string, "widthMm": number, "heightMm": number, "terrains": [] }`.
+  - `POST /api/battlemaps` creates a battlemap from `{ "name": string, "widthMm": number, "heightMm": number, "terrains": [] }`; omitted dimensions default to `760x520mm` and omitted terrain defaults to an empty list.
   - `GET /api/battlemaps/{id}` returns one battlemap.
   - `PATCH /api/battlemaps/{id}` updates custom battlemap name, dimensions, and terrain.
   - `DELETE /api/battlemaps/{id}` deletes custom battlemaps. Built-in starter maps are protected from update and delete.

@@ -82,7 +82,7 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
 - Unit placement, movement, combat alignment, pushback, and withdrawal use the active battlemap bounds instead of a fixed arena size.
 - The browser camera uses the SVG `viewBox`: Fit shows the entire active map regardless of size, zoom clamps at a 200mm minimum visible side, and pan controls keep the view inside map bounds.
 - Units may pass through friendly units only if the move fully clears them; otherwise movement backs up to the last clear position. Enemy contact during forward or backward movement triggers combat.
-- Moving into an enemy creates an engagement, snaps the attacker flush to the defender face when possible, and resolves a combat round.
+- Moving into an enemy creates an engagement, snaps the attacker flush to the defender face when possible, accepts a small geometry tolerance for angled contact, and resolves a combat round.
 - Activating a unit already engaged with an enemy also resolves combat before ordinary actions continue.
 - Combat records dice counts, target numbers, modifiers, rolls, hits, casualties, morale tests, broken units, winners, and pending pushback choices.
 - While a pending combat choice exists, legal actions are limited to `combat_pushback` with one of `pushback_25`, `pushback_75`, `withdraw_25`, or `decline`.

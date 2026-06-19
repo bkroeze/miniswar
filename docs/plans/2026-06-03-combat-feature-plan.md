@@ -24,7 +24,7 @@ Before this work, the engine treated enemy units as blocking movement obstacles 
 **Move Into Combat**
 
 - R1. A moving unit must detect first contact with any enemy unit during a `move` action.
-- R2. On contact, the attacker must be reoriented flush with the defender face being attacked, using the attacking officer as the alignment anchor.
+- R2. On contact, the attacker must be reoriented flush with the defender face being attacked, using the attacking officer as the alignment anchor and allowing a small geometry tolerance for angled contact.
 - R3. The final combat pose must not overlap units, impassable terrain, or the arena edge, move the attacking unit as needed to avoid these obstacles.
 - R4. The game must record an active engagement with attacker, defender, contacted defender face, initiating action, round, and original movement axis.
 
@@ -84,7 +84,7 @@ Before this work, the engine treated enemy units as blocking movement obstacles 
 ```mermaid
 flowchart TB
   A[Move action or activation] --> B{Combat trigger?}
-  B -->|move contact| C[Snap attacker flush and create engagement]
+  B -->|move contact| C[Snap attacker flush within tolerance and create engagement]
   B -->|engaged enemy activates| D[Load existing engagement]
   C --> E[Resolve combat round]
   D --> E
@@ -176,13 +176,13 @@ Existing games without these fields should unmarshal as healthy, not engaged, no
 
 ### U3. Move Into Combat Geometry
 
-- **Goal:** Convert enemy contact during movement into a valid engagement and flush combat pose.
+- **Goal:** Convert enemy contact during movement into a valid engagement and flush combat pose, with a small tolerance for angled contact.
 - **Files:** `internal/game/engine.go`, `internal/game/engine_test.go`.
 - **Patterns:** Extend existing polygon helpers (`miniWorldPolygon`, `polygonsOverlap`, `unitOverlapsEnemyUnit`) and officer-anchor positioning helpers (`miniWorldCenter`, `pivotOriginForAnchor`).
 - **Design Notes:** Movement should detect the first enemy contact candidate, identify the defender face by defender-local quadrant, set attacker facing opposite the contacted face normal, and recompute attacker origin from the attacking officer center. The result must edge-touch without polygon overlap.
 - **Test Scenarios:**
   - `internal/game/engine_test.go`: front, right, rear, and left contact identify the correct defender face.
-  - `internal/game/engine_test.go`: snapped combat pose is flush, non-overlapping, and inside the arena.
+  - `internal/game/engine_test.go`: snapped combat pose is flush or within contact tolerance, non-overlapping, and inside the arena.
   - `internal/game/engine_test.go`: invalid snap against terrain or arena edge reports blocked combat alignment and creates no engagement.
   - `internal/game/engine_test.go`: friendly pass-through and friendly block behavior remain unchanged.
   - `internal/game/engine_test.go`: rough terrain cost before contact is reflected in moved distance.
@@ -279,7 +279,7 @@ Existing games without these fields should unmarshal as healthy, not engaged, no
   - **Covers:** R1, R2, R3, R4, R5, R9, R22
   - **Given:** An activated unit has enough movement to contact an enemy unit.
   - **When:** The player submits a move action.
-  - **Then:** The attacker snaps flush to the defender face, an engagement is recorded, a combat round is resolved, and the action result includes rolls, target numbers, hits, and any pending pushback choice.
+  - **Then:** The attacker snaps flush to the defender face within contact tolerance, an engagement is recorded, a combat round is resolved, and the action result includes rolls, target numbers, hits, and any pending pushback choice.
 
 - AE2. **Officer-Safe Casualties**
   - **Covers:** R11, R12, R13

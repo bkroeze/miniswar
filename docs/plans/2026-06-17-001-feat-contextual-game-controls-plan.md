@@ -38,7 +38,7 @@ The current game screen asks the player to select a unit in the SVG arena, then 
 - R8. Choosing forward or backward move draws a player-colored SVG arrow from the active unit in that direction to the maximum requestable movement for the current activation.
 - R9. Clicking along the move arrow submits the existing `move` action with direction and clicked distance; the server remains authoritative for terrain, collision, combat, and actual distance moved.
 - R10. Choosing pivot highlights the pivot axis mini with a star, defaulting to the officer unless the player selects another mini on the active unit.
-- R11. While pivot mode is active, a battlemap click submits the existing `pivot` action toward that direction, except a directly backward snapped direction submits the existing `about_face` action.
+- R11. While pivot mode is active, a battlemap click submits the existing `pivot` action toward that direction, except a click within 10 degrees of directly backward submits the existing `about_face` action.
 - R12. Clicking the any action control while another is active, for example clicking forward while pivot is active, changes the active action to the clicked control.
 - R13. Clicking the active action control again cancels the active action.
 
@@ -55,7 +55,7 @@ The current game screen asks the player to select a unit in the SVG arena, then 
 - **Render contextual controls inside the SVG:** Buttons, arrows, and pivot stars should be SVG elements appended by the existing render path so their positions share the same millimeter coordinate system as units and terrain.
 - **Keep the server as the rules authority:** The move arrow represents the maximum requestable distance from visible activation state, not a collision or terrain simulator. API messages and action results tell the player what actually happened.
 - **Reuse existing command methods:** `activate`, `takeAction`, and `resolveCombatChoice` can be reshaped or split into smaller helpers, but payloads should still target the existing `/activate` and `/actions` endpoints.
-- **Snap pivot input consistently with placement:** Do not use the existing 45-degree snapped direction convention for map-click facing, instead derive the facing from the click position relative to the currently selected pivot figure's current position. If the snapped facing is opposite the unit's current facing, submit `about_face`; otherwise submit `pivot`.
+- **Derive pivot input from the clicked point:** Do not use the existing 45-degree snapped direction convention for map-click facing. Instead derive the facing from the click position relative to the currently selected pivot figure's current position. If the click is within 10 degrees of directly backward from the unit's current facing, submit `about_face`; otherwise submit `pivot`.
 - **Preserve combat choice as a contextual exception:** Pending pushback, withdraw, or decline is already an action gate. Render it near the winning unit or in the left bar as a fallback, but do not leave it dependent on the removed right panel.
 
 ---
@@ -184,13 +184,13 @@ flowchart TB
 - **Requirements:** R6, R10, R11, R12, R14
 - **Dependencies:** U3, U4
 - **Files:** `web/static/app.js`, `web/static/app.css`, `web/templates/index.html`, `internal/game/engine_test.go`, `internal/server/server_test.go`
-- **Approach:** Make `*` enter or cancel pivot mode. In pivot mode, render a star at the selected pivot mini, defaulting to the officer through the existing `pivotAxisKey()` helper. On any non-control battlemap click, compute a snapped facing from the pivot axis to the click point; submit `about_face` when the snapped facing is opposite current facing, otherwise submit `pivot` with `facingDeg` and `anchorKey`. Make `~` submit the existing `skip` action immediately.
+- **Approach:** Make `*` enter or cancel pivot mode. In pivot mode, render a star at the selected pivot mini, defaulting to the officer through the existing `pivotAxisKey()` helper. On any non-control battlemap click, compute the facing from the pivot axis to the click point; submit `about_face` when that direction is within 10 degrees of opposite the current facing, otherwise submit `pivot` with `facingDeg` and `anchorKey`. Make `~` submit the existing `skip` action immediately.
 - **Patterns to follow:** Current `pivotAxisKey()`, `selectMini()`, `takeAction("pivot")`, `takeAction("about_face")`, `takeAction("skip")`, placement-facing snap behavior in `facingTowardArenaCenter()`, and pivot/about-face engine tests.
 - **Test scenarios:**
   - Clicking `*` highlights the officer with a star when no mini is selected.
   - Selecting a mini on the active unit changes the pivot star to that mini.
   - Clicking the battlemap in pivot mode submits a pivot payload with the selected anchor key.
-  - Clicking a directly backward snapped direction submits `about_face`, not `pivot`.
+  - Clicking within 10 degrees of directly backward submits `about_face`, not `pivot`.
   - Clicking `*` while pivot mode is active cancels pivot mode and leaves the unit unmoved.
   - Clicking `~` submits skip, clears the activation when appropriate, and advances the banner.
 - **Verification:** Manual browser check covers officer pivot, selected-mini pivot, about face, cancel, skip, and rewind; existing Go tests keep backend action semantics stable.
@@ -234,7 +234,7 @@ flowchart TB
 - AE2. Given a potential activation unit is selected, when the player selects a different eligible unit, then the highlight and `+` control move to the newly selected unit without making an API call.
 - AE3. Given the active unit has two actions, when activation succeeds, then the banner shows the first action state and `<`, `*`, `>`, and `~` controls appear below the active unit.
 - AE4. Given forward move mode is active, when the player clicks halfway along the forward arrow, then the UI submits a forward move request for that clicked distance and waits for server feedback before moving the unit visually.
-- AE5. Given pivot mode is active and the officer is the pivot axis, when the player clicks a backward snapped direction, then the UI submits `about_face` instead of `pivot`.
+- AE5. Given pivot mode is active and the officer is the pivot axis, when the player clicks within 10 degrees of directly backward, then the UI submits `about_face` instead of `pivot`.
 - AE6. Given a move creates a pending combat choice, when the response returns, then normal action controls disappear and the legal combat-choice controls are available without the removed right panel.
 - AE7. Given several actions have been taken, when the player rewinds from History in the left bar, then transient move or pivot modes clear and the arena, banner, details, feedback, and history all match the rewound game state.
 

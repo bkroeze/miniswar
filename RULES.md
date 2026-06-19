@@ -61,7 +61,7 @@ A unit that fails its activation roll may only take one *simple* action during i
 
 ## Move into Combat
 
-When a unit moves into contact with any part of an enemy unit, it initiates a "move into combat".  When this occurs, the attacking unit is reoriented flush with the face of the unit they are attacking, centered on the officer of the attacking unit.
+When a unit moves into contact with any part of an enemy unit, it initiates a "move into combat".  When this occurs, the attacking unit is reoriented flush, within a small geometry tolerance for angled contact, with the face of the unit they are attacking, centered on the officer of the attacking unit.
 
 When units are "In combat" due to movement, or due to an activation of one of the enemy units already moved into combat with the unit, a "round of combat" is played.
 

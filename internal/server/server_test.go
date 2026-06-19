@@ -13,6 +13,35 @@ import (
 	"miniswar/internal/store"
 )
 
+func TestHealthcheckIncludesUptime(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	srv := New(st, game.NewEngine(1)).Routes()
+	res := request(t, srv, http.MethodGet, "/healthcheck", "")
+	if res.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", res.Code, res.Body.String())
+	}
+	var got struct {
+		OK            bool    `json:"ok"`
+		Status        string  `json:"status"`
+		Uptime        string  `json:"uptime"`
+		UptimeSeconds float64 `json:"uptimeSeconds"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.OK || got.Status != "ok" {
+		t.Fatalf("healthcheck status = %#v, want ok", got)
+	}
+	if got.Uptime == "" || got.UptimeSeconds < 0 {
+		t.Fatalf("healthcheck uptime = %#v, want populated non-negative uptime", got)
+	}
+}
+
 func TestCreateActivateActionAndRewind(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
 	if err != nil {

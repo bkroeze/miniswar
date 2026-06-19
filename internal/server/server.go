@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"miniswar/internal/game"
 	"miniswar/internal/store"
@@ -21,6 +22,7 @@ type Server struct {
 	indexTmpl      *template.Template
 	armiesTmpl     *template.Template
 	battlemapsTmpl *template.Template
+	startedAt      time.Time
 }
 
 func New(store *store.Store, engine *game.Engine) *Server {
@@ -30,11 +32,13 @@ func New(store *store.Store, engine *game.Engine) *Server {
 		indexTmpl:      template.Must(template.ParseFiles(projectPath("web/templates/index.html"))),
 		armiesTmpl:     template.Must(template.ParseFiles(projectPath("web/templates/armies.html"))),
 		battlemapsTmpl: template.Must(template.ParseFiles(projectPath("web/templates/battlemaps.html"))),
+		startedAt:      time.Now(),
 	}
 }
 
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthcheck", s.healthcheck)
 	mux.HandleFunc("GET /", s.index)
 	mux.HandleFunc("GET /armies", s.armiesPage)
 	mux.HandleFunc("GET /battlemaps", s.battlemapsPage)
@@ -70,6 +74,16 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/games/{id}/actions", s.actions)
 	mux.HandleFunc("POST /api/games/{id}/rewind", s.rewind)
 	return mux
+}
+
+func (s *Server) healthcheck(w http.ResponseWriter, r *http.Request) {
+	uptime := time.Since(s.startedAt)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":            true,
+		"status":        "ok",
+		"uptime":        uptime.String(),
+		"uptimeSeconds": uptime.Seconds(),
+	})
 }
 
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {

@@ -1,0 +1,5 @@
+.git
+docs
+*.sqlite
+/miniswar
+/tmp

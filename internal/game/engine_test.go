@@ -460,6 +460,50 @@ func TestMoveIntoCombatCreatesFlushEngagementAndCombatResult(t *testing.T) {
 	}
 }
 
+func TestAngledSideContactEntersCombat(t *testing.T) {
+	engine := NewEngine(44)
+	g := &Game{
+		Round:         3,
+		Phase:         "activated",
+		ActivePlayer:  1,
+		RandomSeed:    44,
+		Battlemap:     Battlemaps()[0],
+		Engagements:   []CombatEngagement{},
+		ActionHistory: []ActionRecord{},
+	}
+	attacker := formationUnit("u1", 1, 387.192341, 202.457735, 93, 10)
+	attacker.MovementLimitMM = 150
+	attacker.Stats = UnitStats{A: 20, D: 20, CD: 1, H: 20}
+	setMiniHealth(&attacker, 20)
+	defender := formationUnit("u2", 2, 432.4838532554112, 429.9246441530356, 267, 10)
+	defender.MovementLimitMM = 125
+	defender.Stats = UnitStats{A: 20, D: 20, CD: 1, H: 20}
+	setMiniHealth(&defender, 20)
+	g.Units = []Unit{attacker, defender}
+	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 1}
+
+	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionMove, Direction: "forward", DistanceMM: 147})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := rec.Result.(map[string]any)
+	move := result["movement"].(MoveResult)
+	if move.Status != "entered_combat" {
+		t.Fatalf("move status = %q, want entered_combat: %+v", move.Status, move)
+	}
+	if move.DefenderFace != CombatFaceRight {
+		t.Fatalf("defender face = %q, want right", move.DefenderFace)
+	}
+	updated, _ := findUnit(g, "u1")
+	if unitsMiniRectsOverlap(*updated, updated.X, updated.Y, defender) {
+		t.Fatal("attacker should be snapped into non-overlapping combat contact")
+	}
+	if !unitsMiniRectsTouch(*updated, updated.X, updated.Y, defender) && !unitsMiniRectsNearTouch(*updated, updated.X, updated.Y, defender, combatContactToleranceMM) {
+		t.Fatal("attacker should be snapped into combat contact")
+	}
+}
+
 func TestExactEdgeContactEntersCombat(t *testing.T) {
 	engine := NewEngine(24)
 	g := &Game{

@@ -200,30 +200,17 @@ h3 {
 
 .shell {
   display: grid;
-  grid-template-columns: 280px minmax(360px, 1fr) 330px;
+  grid-template-columns: 300px minmax(360px, 1fr);
   gap: 1rem;
   padding: 1rem;
   transition: grid-template-columns 140ms ease;
 }
 
-.shell.setup-active {
-  grid-template-columns: 280px minmax(360px, 1fr);
-}
-
 .shell.setup-collapsed {
-  grid-template-columns: 28px minmax(360px, 1fr) 330px;
-}
-
-.shell.setup-active.setup-collapsed {
   grid-template-columns: 28px minmax(360px, 1fr);
 }
 
-.shell.setup-active .controls {
-  display: none;
-}
-
-.setup,
-.controls {
+.setup {
   border-left: 3px solid var(--line);
   padding-left: 0.85rem;
 }
@@ -240,6 +227,8 @@ h3 {
 
 .setup-body {
   min-width: 0;
+  display: grid;
+  gap: 1rem;
 }
 
 .sidebar-toggle {
@@ -262,13 +251,17 @@ h3 {
 }
 
 .details-panel,
+.feedback-panel,
+.history-panel,
 .unit-detail,
 .detail-empty {
   display: grid;
   gap: 0.75rem;
 }
 
-.details-panel h2 {
+.details-panel h2,
+.feedback-panel h2,
+.history-panel h2 {
   margin-bottom: 0;
 }
 
@@ -336,8 +329,7 @@ h3 {
   margin: 0;
 }
 
-.setup-grid,
-.action-grid {
+.setup-grid {
   display: grid;
   gap: 0.75rem;
 }
@@ -387,6 +379,21 @@ label {
 .arena-panel {
   min-width: 0;
   position: relative;
+}
+
+.gameplay-banner {
+  position: absolute;
+  z-index: 2;
+  top: 0.75rem;
+  left: 0.75rem;
+  max-width: min(28rem, calc(100% - 11rem));
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #1f3f43;
+  border-radius: 6px;
+  background: rgba(255, 253, 248, 0.94);
+  color: var(--ink);
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .arena-toolbar {
@@ -556,17 +563,73 @@ label {
   dominant-baseline: middle;
 }
 
-.control-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+.arena-control {
+  cursor: pointer;
 }
 
-.target-line {
-  margin: -0.25rem 0 0.75rem;
-  color: var(--muted);
-  font-size: 0.9rem;
+.arena-control rect {
+  fill: #fffdf8;
+  stroke-width: 2;
+  filter: drop-shadow(0 2px 2px rgba(34, 33, 29, 0.18));
+}
+
+.arena-control.p1 rect {
+  stroke: var(--blue);
+}
+
+.arena-control.p2 rect {
+  stroke: var(--red);
+}
+
+.arena-control.active rect {
+  fill: #f7e7a7;
+  stroke: #15130f;
+}
+
+.arena-control-label {
+  fill: var(--ink);
+  font-size: 18px;
+  font-weight: 700;
+  pointer-events: none;
+  dominant-baseline: middle;
+}
+
+.move-arrow {
+  cursor: crosshair;
+}
+
+.move-arrow line {
+  fill: none;
+  stroke-width: 7;
+  stroke-linecap: round;
+  opacity: 0.82;
+}
+
+.move-arrow path {
+  opacity: 0.88;
+}
+
+.move-arrow.p1 line,
+.move-arrow.p1 path {
+  stroke: var(--blue);
+  fill: var(--blue);
+}
+
+.move-arrow.p2 line,
+.move-arrow.p2 path {
+  stroke: var(--red);
+  fill: var(--red);
+}
+
+.pivot-star {
+  fill: #15130f;
+  paint-order: stroke;
+  stroke: #f7e7a7;
+  stroke-width: 5px;
+  font-size: 28px;
+  font-weight: 700;
+  pointer-events: none;
+  dominant-baseline: middle;
 }
 
 .combat-choice {

@@ -18,6 +18,7 @@ function createMiniswarApp() {
     armyDefaultsApplied: false,
     camera: { x: 0, y: 0, width: 760, height: 520 },
     cameraMapId: "",
+    activeCommand: null,
     setup: {
       battlemapId: "old_road",
       player1ArmyId: "",
@@ -270,6 +271,7 @@ function createMiniswarApp() {
     async activate() {
       const unit = this.selectedActivatableUnit();
       if (!unit) return;
+      this.clearActiveCommand();
       const response = await this.api(`/api/games/${this.game.id}/activate`, {
         method: "POST",
         body: JSON.stringify({ playerId: this.game.activePlayer, unitId: unit.id }),
@@ -309,6 +311,7 @@ function createMiniswarApp() {
       const payload = { playerId: unit.playerId, unitId: unit.id, type };
       if (type === "move") Object.assign(payload, this.move);
       if (type === "pivot") Object.assign(payload, { ...this.pivot, anchorKey: this.pivotAxisKey() });
+      this.clearActiveCommand();
       const response = await this.api(`/api/games/${this.game.id}/actions`, {
         method: "POST",
         body: JSON.stringify(payload),
@@ -322,6 +325,7 @@ function createMiniswarApp() {
     async resolveCombatChoice(combatChoice) {
       const choice = this.pendingCombatChoice();
       if (!choice) return;
+      this.clearActiveCommand();
       const response = await this.api(`/api/games/${this.game.id}/actions`, {
         method: "POST",
         body: JSON.stringify({
@@ -344,6 +348,7 @@ function createMiniswarApp() {
       });
       if (response.ok) {
         this.placementPreview = null;
+        this.clearActiveCommand();
         await this.setGame(response.game, { resetSelection: true });
         this.renderArena();
       }
@@ -477,6 +482,10 @@ function createMiniswarApp() {
       return this.game?.pendingCombatChoice || null;
     },
 
+    clearActiveCommand() {
+      this.activeCommand = null;
+    },
+
     combatChoiceLabel(choice) {
       return {
         pushback_25: "Push 25mm",
@@ -492,6 +501,24 @@ function createMiniswarApp() {
 
     canAct() {
       return Boolean(this.game?.currentActivation && !this.pendingCombatChoice());
+    },
+
+    isCommandActive(type, direction = "") {
+      return this.activeCommand?.type === type && (!direction || this.activeCommand.direction === direction);
+    },
+
+    setActiveCommand(type, options = {}) {
+      if (this.isCommandActive(type, options.direction || "")) {
+        this.clearActiveCommand();
+        this.renderArena();
+        return;
+      }
+      this.activeCommand = { type, ...options };
+      this.renderArena();
+    },
+
+    async skipActiveUnit() {
+      await this.takeAction("skip");
     },
 
     selectedUnitLabel() {
@@ -518,12 +545,16 @@ function createMiniswarApp() {
         if (this.game.currentActivation.unitId === unit.id) {
           this.selectedUnit = unit.id;
         }
+        if (this.game.currentActivation.unitId !== unit.id) {
+          this.clearActiveCommand();
+        }
         await this.renderArenaSoon();
         return;
       }
       if (unit.playerId === this.game.activePlayer && !unit.broken && this.unitHasActiveMinis(unit) && !this.unitActivatedThisRound(unit.id)) {
         this.selectedUnit = unit.id;
         this.selectedMini = "";
+        this.clearActiveCommand();
       }
       await this.renderArenaSoon();
     },
@@ -580,6 +611,34 @@ function createMiniswarApp() {
       return `Round ${this.game.round}, player ${this.game.activePlayer} to activate`;
     },
 
+    gameplayBanner() {
+      if (!this.game) return "";
+      if (this.game.phase === "complete") {
+        return this.game.winnerPlayerId ? `Game Complete - Player ${this.game.winnerPlayerId} Wins` : "Game Complete - Draw";
+      }
+      const choice = this.pendingCombatChoice();
+      if (choice) {
+        return `Player ${choice.winningPlayerId} - Combat Choice`;
+      }
+      const activation = this.game.currentActivation;
+      if (!activation) {
+        return `Player ${this.game.activePlayer} - Activating`;
+      }
+      const total = this.activationActionTotal(activation);
+      const current = Math.min(total, Math.max(1, total - activation.actionsRemaining + 1));
+      const prefix = activation.success ? "Activation Succeeded" : "Simple Activation";
+      return `${prefix} - Action ${current}/${total}`;
+    },
+
+    activationActionTotal(activation) {
+      const activationRecord = [...(this.game?.actionHistory || [])]
+        .reverse()
+        .find((action) => action.type === "activate" && action.unitId === activation.unitId && action.round === this.game.round);
+      if (!activation.success) return 1;
+      if (activationRecord?.result?.wasDisordered && activationRecord?.result?.disorderCleared) return 1;
+      return 2;
+    },
+
     async setGame(game, options = {}) {
       const previousActivationUnitId = this.game?.currentActivation?.unitId || "";
       this.game = game;
@@ -592,6 +651,7 @@ function createMiniswarApp() {
       if (this.isSetupPhase()) {
         if (options.resetSelection) this.selectedUnit = "";
         this.selectedMini = "";
+        this.clearActiveCommand();
         await this.renderArenaSoon();
         return;
       }
@@ -602,6 +662,9 @@ function createMiniswarApp() {
       }
       if (options.resetSelection || options.resetPivotAxis || !this.currentActivationUnit()) {
         this.selectedMini = "";
+      }
+      if (options.resetSelection || !this.currentActivationUnit() || this.pendingCombatChoice()) {
+        this.clearActiveCommand();
       }
       await this.renderArenaSoon();
     },
@@ -698,8 +761,14 @@ function createMiniswarApp() {
     },
 
     async arenaClicked(event) {
-      if (!this.isSetupPhase()) return;
       const clickedUnit = event.target.closest("[data-unit]");
+      const clickedControl = event.target.closest("[data-arena-control]");
+      if (clickedControl) return;
+      if (!this.isSetupPhase()) {
+        if (clickedUnit) return;
+        await this.handleActionMapClick(event);
+        return;
+      }
       if (clickedUnit && !clickedUnit.classList.contains("placement-preview")) return;
       const unit = this.currentPlacementUnit();
       if (!unit) return;
@@ -712,6 +781,18 @@ function createMiniswarApp() {
       const officerY = sameSpot ? this.placementPreview.officerY : point.y;
       this.placementPreview = this.previewPlacement(unit, officerX, officerY, facingDeg);
       await this.renderArenaSoon();
+    },
+
+    async handleActionMapClick(event) {
+      if (!this.canAct() || !this.activeCommand) return;
+      const point = this.arenaPoint(event);
+      if (this.activeCommand.type === "move") {
+        await this.submitMoveAtPoint(point);
+        return;
+      }
+      if (this.activeCommand.type === "pivot") {
+        await this.submitPivotAtPoint(point);
+      }
     },
 
     previewPlacement(unit, officerX, officerY, facingDeg) {
@@ -737,6 +818,105 @@ function createMiniswarApp() {
     rotatePoint(x, y, deg) {
       const rad = (deg * Math.PI) / 180;
       return { x: x * Math.cos(rad) - y * Math.sin(rad), y: x * Math.sin(rad) + y * Math.cos(rad) };
+    },
+
+    unitWorldPoint(unit, x, y) {
+      const point = this.rotatePoint(x, y, unit.facingDeg || 0);
+      return { x: unit.x + point.x, y: unit.y + point.y };
+    },
+
+    miniWorldCenter(unit, mini) {
+      return this.unitWorldPoint(unit, mini.relX + mini.widthMm / 2, mini.relY + mini.depthMm / 2);
+    },
+
+    unitWorldBounds(unit) {
+      const activeMinis = (unit.minis || []).filter((mini) => !mini.removed);
+      if (activeMinis.length === 0) return { minX: unit.x || 0, minY: unit.y || 0, maxX: unit.x || 0, maxY: unit.y || 0 };
+      const points = [];
+      for (const mini of activeMinis) {
+        points.push(this.unitWorldPoint(unit, mini.relX, mini.relY));
+        points.push(this.unitWorldPoint(unit, mini.relX + mini.widthMm, mini.relY));
+        points.push(this.unitWorldPoint(unit, mini.relX, mini.relY + mini.depthMm));
+        points.push(this.unitWorldPoint(unit, mini.relX + mini.widthMm, mini.relY + mini.depthMm));
+      }
+      return points.reduce(
+        (bounds, point) => ({
+          minX: Math.min(bounds.minX, point.x),
+          minY: Math.min(bounds.minY, point.y),
+          maxX: Math.max(bounds.maxX, point.x),
+          maxY: Math.max(bounds.maxY, point.y),
+        }),
+        { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
+      );
+    },
+
+    unitWorldCenter(unit) {
+      const bounds = this.unitWorldBounds(unit);
+      return { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
+    },
+
+    controlSize() {
+      const visibleSide = Math.min(this.camera.width || this.battlemapWidth(), this.camera.height || this.battlemapHeight());
+      return Math.max(18, Math.min(42, visibleSide * 0.06));
+    },
+
+    moveVector(unit, direction) {
+      const sign = direction === "backward" ? -1 : 1;
+      const rad = ((unit.facingDeg || 0) * Math.PI) / 180;
+      return { x: Math.sin(rad) * sign, y: -Math.cos(rad) * sign };
+    },
+
+    maxMoveDistance(unit, direction) {
+      const activation = this.game?.currentActivation;
+      let limit = this.movementLimitForUnit(unit);
+      if (direction === "backward") limit /= 2;
+      if ((activation?.movesTaken || 0) > 0) limit /= 2;
+      return Math.max(1, limit);
+    },
+
+    async submitMoveAtPoint(point) {
+      const unit = this.currentActivationUnit();
+      const direction = this.activeCommand?.direction;
+      if (!unit || !direction) return;
+      const start = this.unitWorldCenter(unit);
+      const vector = this.moveVector(unit, direction);
+      const maxDistance = this.maxMoveDistance(unit, direction);
+      const projected = (point.x - start.x) * vector.x + (point.y - start.y) * vector.y;
+      this.move.direction = direction;
+      this.move.distanceMm = Math.max(1, Math.min(maxDistance, Math.round(projected)));
+      await this.takeAction("move");
+    },
+
+    async submitPivotAtPoint(point) {
+      const unit = this.currentActivationUnit();
+      if (!unit) return;
+      const axis = unit.minis.find((mini) => mini.key === this.pivotAxisKey()) || unit.minis.find((mini) => mini.isOfficer) || unit.minis[0];
+      if (!axis) return;
+      const origin = this.miniWorldCenter(unit, axis);
+      const dx = point.x - origin.x;
+      const dy = point.y - origin.y;
+      if (Math.hypot(dx, dy) < 1) return;
+      const facingDeg = ((Math.round((Math.atan2(dx, -dy) * 180) / Math.PI) % 360) + 360) % 360;
+      const backwards = (unit.facingDeg + 180) % 360;
+      if (this.angleDifference(facingDeg, backwards) <= 10) {
+        await this.takeAction("about_face");
+        return;
+      }
+      this.pivot.facingDeg = facingDeg;
+      await this.takeAction("pivot");
+    },
+
+    angleDifference(a, b) {
+      const diff = Math.abs((((a - b) % 360) + 540) % 360 - 180);
+      return diff;
+    },
+
+    svgElement(name, attrs = {}) {
+      const element = document.createElementNS("http://www.w3.org/2000/svg", name);
+      for (const [key, value] of Object.entries(attrs)) {
+        element.setAttribute(key, value);
+      }
+      return element;
     },
 
     renderArena() {
@@ -825,6 +1005,113 @@ function createMiniswarApp() {
         }
         root.appendChild(group);
       }
+      this.renderOverlays();
+    },
+
+    renderOverlays() {
+      const root = this.$refs.overlays;
+      if (!root) return;
+      root.replaceChildren();
+      if (!this.game || this.isSetupPhase()) return;
+      if (this.pendingCombatChoice()) {
+        this.renderCombatChoiceOverlay(root);
+        return;
+      }
+      if (this.canActivate()) {
+        const unit = this.selectedActivatableUnit();
+        if (unit?.placed) {
+          const position = this.controlRowPosition(unit, 1);
+          this.appendArenaControl(root, position.x, position.y, "+", unit.playerId, () => void this.activate(), "Activate unit");
+        }
+        return;
+      }
+      const unit = this.currentActivationUnit();
+      if (!unit?.placed || !this.canAct()) return;
+      const positions = this.controlRowPositions(unit, 4);
+      this.appendArenaControl(root, positions[0].x, positions[0].y, "<", unit.playerId, () => this.setActiveCommand("move", { direction: "backward" }), "Move backward", this.isCommandActive("move", "backward"));
+      this.appendArenaControl(root, positions[1].x, positions[1].y, "*", unit.playerId, () => this.setActiveCommand("pivot"), "Pivot", this.isCommandActive("pivot"));
+      this.appendArenaControl(root, positions[2].x, positions[2].y, ">", unit.playerId, () => this.setActiveCommand("move", { direction: "forward" }), "Move forward", this.isCommandActive("move", "forward"));
+      this.appendArenaControl(root, positions[3].x, positions[3].y, "~", unit.playerId, () => void this.skipActiveUnit(), "Skip");
+      if (this.activeCommand?.type === "move") {
+        this.appendMoveArrow(root, unit, this.activeCommand.direction);
+      }
+      if (this.activeCommand?.type === "pivot") {
+        this.appendPivotStar(root, unit);
+      }
+    },
+
+    controlRowPosition(unit, count) {
+      return this.controlRowPositions(unit, count)[0];
+    },
+
+    controlRowPositions(unit, count) {
+      const bounds = this.unitWorldBounds(unit);
+      const size = this.controlSize();
+      const gap = size * 0.22;
+      const totalWidth = count * size + (count - 1) * gap;
+      const startX = (bounds.minX + bounds.maxX) / 2 - totalWidth / 2 + size / 2;
+      const y = bounds.maxY + size * 0.85;
+      return Array.from({ length: count }, (_, index) => ({ x: startX + index * (size + gap), y }));
+    },
+
+    appendArenaControl(root, x, y, label, playerId, onClick, title, active = false) {
+      const size = this.controlSize();
+      const group = this.svgElement("g", { class: `arena-control p${playerId}${active ? " active" : ""}`, "data-arena-control": label, transform: `translate(${x} ${y})` });
+      group.addEventListener("click", (event) => {
+        event.stopPropagation();
+        onClick();
+      });
+      group.appendChild(this.svgElement("title")).textContent = title;
+      group.appendChild(this.svgElement("rect", { x: -size / 2, y: -size / 2, width: size, height: size, rx: size * 0.16, ry: size * 0.16 }));
+      const text = this.svgElement("text", { x: 0, y: size * 0.13, "text-anchor": "middle", class: "arena-control-label" });
+      text.textContent = label;
+      group.appendChild(text);
+      root.appendChild(group);
+    },
+
+    appendMoveArrow(root, unit, direction) {
+      const start = this.unitWorldCenter(unit);
+      const vector = this.moveVector(unit, direction);
+      const distance = this.maxMoveDistance(unit, direction);
+      const end = { x: start.x + vector.x * distance, y: start.y + vector.y * distance };
+      const group = this.svgElement("g", { class: `move-arrow p${unit.playerId}` });
+      group.appendChild(this.svgElement("line", { x1: start.x, y1: start.y, x2: end.x, y2: end.y }));
+      const head = this.controlSize() * 0.35;
+      const angle = Math.atan2(vector.y, vector.x);
+      const left = { x: end.x - Math.cos(angle - Math.PI / 6) * head, y: end.y - Math.sin(angle - Math.PI / 6) * head };
+      const right = { x: end.x - Math.cos(angle + Math.PI / 6) * head, y: end.y - Math.sin(angle + Math.PI / 6) * head };
+      group.appendChild(this.svgElement("path", { d: `M ${end.x} ${end.y} L ${left.x} ${left.y} L ${right.x} ${right.y} Z` }));
+      root.appendChild(group);
+    },
+
+    appendPivotStar(root, unit) {
+      const axis = unit.minis.find((mini) => mini.key === this.pivotAxisKey()) || unit.minis.find((mini) => mini.isOfficer) || unit.minis[0];
+      if (!axis) return;
+      const center = this.miniWorldCenter(unit, axis);
+      const size = this.controlSize() * 0.38;
+      const star = this.svgElement("text", { x: center.x, y: center.y + size * 0.32, "text-anchor": "middle", class: "pivot-star" });
+      star.textContent = "*";
+      root.appendChild(star);
+    },
+
+    renderCombatChoiceOverlay(root) {
+      const choice = this.pendingCombatChoice();
+      if (!choice) return;
+      const unit = this.game?.units?.find((candidate) => candidate.id === choice.winningUnitId);
+      if (!unit?.placed) return;
+      const positions = this.controlRowPositions(unit, choice.choices?.length || 0);
+      (choice.choices || []).forEach((combatChoice, index) => {
+        this.appendArenaControl(root, positions[index].x, positions[index].y, this.combatChoiceGlyph(combatChoice), unit.playerId, () => void this.resolveCombatChoice(combatChoice), this.combatChoiceLabel(combatChoice));
+      });
+    },
+
+    combatChoiceGlyph(choice) {
+      return {
+        pushback_25: "25",
+        pushback_75: "75",
+        withdraw_25: "<",
+        decline: "x",
+      }[choice] || "?";
     },
 
     isEngagedUnit(unitId) {

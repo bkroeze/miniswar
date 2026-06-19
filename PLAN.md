@@ -11,7 +11,8 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
 - `internal/store` persists games, snapshots, the imported unit catalog, army templates, and army rosters in SQLite.
 - `web` serves the landing page, management pages, CSS, Alpine.js, and SVG rendering.
 - The store imports `data/units.json` into `catalog_units` and `catalog_unit_terrains` when it opens.
-- The arena is rendered entirely in SVG using millimeter coordinates. Minis are rectangles sized by base dimensions, with unit/player color, facing indicator, mini key, officer marking, status styling, and engagement styling.
+- The arena is rendered entirely in SVG using millimeter coordinates. Minis are rectangles sized by base dimensions, with unit/player color, facing indicator, mini key, officer marking, status styling, engagement styling, and contextual unit-adjacent controls.
+- During play, the browser uses a top gameplay banner plus SVG controls near the active unit instead of a right-side action form. Feedback and rewindable action history live in the left bar with unit details.
 - Battlemaps are saved in SQLite with dimensions and rectangular terrain zones. The browser includes a battlemap editor, and active games copy the chosen map definition so later library edits do not mutate saved or rewindable game state.
 - Setup can use saved army rosters for either player, or fall back to manual units when no roster is selected.
 - Unit layout uses stable mini keys like `p1-u1-m01`; the officer defaults to one of the center positions in the front rank.
@@ -81,7 +82,7 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
 - Unit placement, movement, combat alignment, pushback, and withdrawal use the active battlemap bounds instead of a fixed arena size.
 - The browser camera uses the SVG `viewBox`: Fit shows the entire active map regardless of size, zoom clamps at a 200mm minimum visible side, and pan controls keep the view inside map bounds.
 - Units may pass through friendly units only if the move fully clears them; otherwise movement backs up to the last clear position. Enemy contact during forward or backward movement triggers combat.
-- Moving into an enemy creates an engagement, snaps the attacker flush to the defender face when possible, and resolves a combat round.
+- Moving into an enemy creates an engagement, snaps the attacker flush to the defender face when possible, accepts a small geometry tolerance for angled contact, and resolves a combat round.
 - Activating a unit already engaged with an enemy also resolves combat before ordinary actions continue.
 - Combat records dice counts, target numbers, modifiers, rolls, hits, casualties, morale tests, broken units, winners, and pending pushback choices.
 - While a pending combat choice exists, legal actions are limited to `combat_pushback` with one of `pushback_25`, `pushback_75`, `withdraw_25`, or `decline`.
@@ -97,7 +98,7 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
 - Unit tests for combat alignment, dice, target numbers, hit allocation, officer-safe casualties, morale, broken cascades, pushback/withdraw/decline, and win completion.
 - Store tests for catalog import, filters, template CRUD, roster CRUD, battlemap CRUD, validation, and army-to-game setup conversion.
 - HTTP tests for catalog endpoints, army endpoints, battlemap endpoints, create game, copied game battlemaps, place units, activate, apply actions, combat pushback, list actions, persistence, and rewind.
-- Manual browser check: manage templates/rosters/battlemaps, create a game from rosters, place units, zoom/pan/fit the SVG arena, activate, move/pivot/about-face/skip, enter combat, resolve pushback, rewind, and verify SVG updates and action feedback.
+- Manual browser check: manage templates/rosters/battlemaps, create a game from rosters, place units, zoom/pan/fit the SVG arena, activate with the unit-adjacent `+`, move with forward/backward arrows, pivot/about-face from battlemap clicks, skip with `~`, enter combat, resolve pushback, rewind, and verify SVG updates, banner text, left-bar history, and action feedback.
 
 ## Assumptions
 

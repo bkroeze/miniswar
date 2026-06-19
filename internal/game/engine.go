@@ -932,7 +932,7 @@ func snapAttackerFlush(attacker *Unit, defender Unit, defenderFace string, battl
 	officerX := faceMidX - normalX*frontOffset
 	officerY := faceMidY - normalY*frontOffset
 	relX, relY := rotatePoint(miniCenterX(officer), miniCenterY(officer), attacker.FacingDeg)
-	for offset := 0.0; offset <= 100; offset++ {
+	for offset := 0.0; offset <= 100; offset += combatSnapStepMM {
 		attacker.X = officerX - relX - normalX*offset
 		attacker.Y = officerY - relY - normalY*offset
 		if combatPoseValid(*attacker, defender.ID, battlemap, units) {
@@ -990,7 +990,7 @@ func combatPoseValid(unit Unit, defenderID string, battlemap Battlemap, units []
 			if unitsMiniRectsOverlap(unit, unit.X, unit.Y, other) {
 				return false
 			}
-			if !unitsMiniRectsTouch(unit, unit.X, unit.Y, other) {
+			if !unitsMiniRectsTouch(unit, unit.X, unit.Y, other) && !unitsMiniRectsNearTouch(unit, unit.X, unit.Y, other, combatContactToleranceMM) {
 				return false
 			}
 			continue
@@ -1804,6 +1804,11 @@ func unitsMiniRectsOverlap(unit Unit, x, y float64, other Unit) bool {
 	return false
 }
 
+const (
+	combatSnapStepMM         = 0.05
+	combatContactToleranceMM = 0.1
+)
+
 func unitsMiniRectsTouch(unit Unit, x, y float64, other Unit) bool {
 	for _, mini := range unit.Minis {
 		if mini.Removed {
@@ -1815,6 +1820,24 @@ func unitsMiniRectsTouch(unit Unit, x, y float64, other Unit) bool {
 				continue
 			}
 			if rectsTouch(box, polygonBounds(miniWorldPolygon(other, otherMini, other.X, other.Y))) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func unitsMiniRectsNearTouch(unit Unit, x, y float64, other Unit, tolerance float64) bool {
+	for _, mini := range unit.Minis {
+		if mini.Removed {
+			continue
+		}
+		poly := miniWorldPolygon(unit, mini, x, y)
+		for _, otherMini := range other.Minis {
+			if otherMini.Removed {
+				continue
+			}
+			if polygonDistance(poly, miniWorldPolygon(other, otherMini, other.X, other.Y)) <= tolerance {
 				return true
 			}
 		}
@@ -1872,6 +1895,50 @@ func polygonsOverlap(a, b [4][2]float64) bool {
 		}
 	}
 	return true
+}
+
+func polygonDistance(a, b [4][2]float64) float64 {
+	if polygonsOverlap(a, b) {
+		return 0
+	}
+	distance := math.Inf(1)
+	for i := 0; i < len(a); i++ {
+		aNext := (i + 1) % len(a)
+		for j := 0; j < len(b); j++ {
+			bNext := (j + 1) % len(b)
+			distance = math.Min(distance, segmentDistance(
+				a[i][0], a[i][1],
+				a[aNext][0], a[aNext][1],
+				b[j][0], b[j][1],
+				b[bNext][0], b[bNext][1],
+			))
+		}
+	}
+	return distance
+}
+
+func segmentDistance(ax, ay, bx, by, cx, cy, dx, dy float64) float64 {
+	if segmentsIntersect(ax, ay, bx, by, cx, cy, dx, dy) {
+		return 0
+	}
+	return minFloat(
+		minFloat(pointSegmentDistance(ax, ay, cx, cy, dx, dy), pointSegmentDistance(bx, by, cx, cy, dx, dy)),
+		minFloat(pointSegmentDistance(cx, cy, ax, ay, bx, by), pointSegmentDistance(dx, dy, ax, ay, bx, by)),
+	)
+}
+
+func pointSegmentDistance(px, py, ax, ay, bx, by float64) float64 {
+	dx := bx - ax
+	dy := by - ay
+	lengthSquared := dx*dx + dy*dy
+	if lengthSquared == 0 {
+		return math.Hypot(px-ax, py-ay)
+	}
+	t := ((px-ax)*dx + (py-ay)*dy) / lengthSquared
+	t = math.Max(0, math.Min(1, t))
+	closestX := ax + t*dx
+	closestY := ay + t*dy
+	return math.Hypot(px-closestX, py-closestY)
 }
 
 func projectPolygon(poly [4][2]float64, axisX, axisY float64) (float64, float64) {

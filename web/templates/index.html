@@ -101,10 +101,39 @@
             </article>
           </template>
         </section>
+        <section class="combat-choice" x-show="pendingCombatChoice()" x-cloak>
+          <h2>Combat Choice</h2>
+          <p x-text="pendingCombatChoice() ? `${pendingCombatChoice().winningUnitId} won against ${pendingCombatChoice().losingUnitId}` : ''"></p>
+          <div class="choice-grid">
+            <template x-for="choice in pendingCombatChoice()?.choices || []" :key="choice">
+              <button type="button" @click="resolveCombatChoice(choice)" x-text="combatChoiceLabel(choice)"></button>
+            </template>
+          </div>
+        </section>
+        <section class="feedback-panel" x-show="!showLanding()">
+          <h2>Feedback</h2>
+          <ol class="messages">
+            <template x-for="message in messages" :key="message">
+              <li x-text="message"></li>
+            </template>
+          </ol>
+        </section>
+        <section class="history-panel" x-show="game">
+          <h2>History</h2>
+          <ol class="history">
+            <template x-for="action in game?.actionHistory || []" :key="action.index">
+              <li>
+                <button type="button" @click="rewind(action.index)">rewind</button>
+                <span x-text="`${action.index}: ${action.type} ${action.unitId || ''}`"></span>
+              </li>
+            </template>
+          </ol>
+        </section>
       </div>
     </section>
 
     <section class="arena-panel">
+      <div class="gameplay-banner" x-show="game && !isSetupPhase()" x-text="gameplayBanner()"></div>
       <div class="placement-hud" x-show="isSetupPhase()">
         <span x-text="selectedUnitLabel()"></span>
         <button type="button" @click="confirmPlacement()" :disabled="!placementPreview">Confirm</button>
@@ -129,62 +158,8 @@
         <rect :width="battlemapWidth()" :height="battlemapHeight()" fill="url(#grid)"></rect>
         <g x-ref="terrain"></g>
         <g x-ref="units"></g>
+        <g x-ref="overlays"></g>
       </svg>
-    </section>
-
-    <section class="controls">
-      <h2>Activation</h2>
-      <div class="control-row">
-        <button type="button" @click="activate()" :disabled="!canActivate()">Activate</button>
-        <span x-text="selectedUnitLabel()"></span>
-      </div>
-
-      <h2>Actions</h2>
-      <section class="combat-choice" x-show="pendingCombatChoice()" x-cloak>
-        <h3>Combat Choice</h3>
-        <p x-text="pendingCombatChoice() ? `${pendingCombatChoice().winningUnitId} won against ${pendingCombatChoice().losingUnitId}` : ''"></p>
-        <div class="choice-grid">
-          <template x-for="choice in pendingCombatChoice()?.choices || []" :key="choice">
-            <button type="button" @click="resolveCombatChoice(choice)" x-text="combatChoiceLabel(choice)"></button>
-          </template>
-        </div>
-      </section>
-      <p class="target-line" x-text="pivotAxisLabel()"></p>
-      <div class="action-grid">
-        <label>Distance
-          <input type="number" min="1" x-model.number="move.distanceMm">
-        </label>
-        <label>Direction
-          <select x-model="move.direction">
-            <option value="forward">forward</option>
-            <option value="backward">backward</option>
-          </select>
-        </label>
-        <button type="button" @click="takeAction('move')" :disabled="!canAct()">Move</button>
-        <label>Pivot Deg
-          <input type="number" min="0" max="359" x-model.number="pivot.facingDeg">
-        </label>
-        <button type="button" @click="takeAction('pivot')" :disabled="!canAct()">Pivot</button>
-        <button type="button" @click="takeAction('about_face')" :disabled="!canAct()">About Face</button>
-        <button type="button" @click="takeAction('skip')" :disabled="!canAct()">Skip</button>
-      </div>
-
-      <h2>Feedback</h2>
-      <ol class="messages">
-        <template x-for="message in messages" :key="message">
-          <li x-text="message"></li>
-        </template>
-      </ol>
-
-      <h2>History</h2>
-      <ol class="history">
-        <template x-for="action in game?.actionHistory || []" :key="action.index">
-          <li>
-            <button type="button" @click="rewind(action.index)">rewind</button>
-            <span x-text="`${action.index}: ${action.type} ${action.unitId || ''}`"></span>
-          </li>
-        </template>
-      </ol>
     </section>
   </main>
 

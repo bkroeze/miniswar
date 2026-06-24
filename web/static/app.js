@@ -748,7 +748,8 @@ function createMiniswarApp() {
     },
 
     arenaPoint(event) {
-      const svg = event.currentTarget;
+      const eventElement = event.currentTarget || event.target;
+      const svg = eventElement.ownerSVGElement || eventElement;
       const point = svg.createSVGPoint();
       point.x = event.clientX;
       point.y = event.clientY;
@@ -949,14 +950,16 @@ function createMiniswarApp() {
       return Math.max(1, limit);
     },
 
-    async submitMoveAtPoint(point) {
+    async submitMoveAtPoint(point, requestedDirection = "") {
       const unit = this.currentActivationUnit();
-      const direction = this.activeCommand?.direction;
-      if (!unit || !direction) return;
+      if (!unit || !this.canAct() || this.activeCommand?.type !== "move") return;
       const start = this.unitWorldCenter(unit);
-      const vector = this.moveVector(unit, direction);
+      const forwardVector = this.moveVector(unit, "forward");
+      const forwardProjection = (point.x - start.x) * forwardVector.x + (point.y - start.y) * forwardVector.y;
+      const direction = requestedDirection || this.activeCommand?.direction || (forwardProjection < 0 ? "backward" : "forward");
+      const vector = direction === "forward" ? forwardVector : this.moveVector(unit, direction);
       const maxDistance = this.maxMoveDistance(unit, direction);
-      const projected = (point.x - start.x) * vector.x + (point.y - start.y) * vector.y;
+      const projected = requestedDirection || this.activeCommand?.direction ? (point.x - start.x) * vector.x + (point.y - start.y) * vector.y : Math.abs(forwardProjection);
       this.move.direction = direction;
       this.move.distanceMm = Math.max(1, Math.min(maxDistance, Math.round(projected)));
       await this.takeAction("move");
@@ -1102,13 +1105,13 @@ function createMiniswarApp() {
       }
       const unit = this.currentActivationUnit();
       if (!unit?.placed || !this.canAct()) return;
-      const positions = this.controlRowPositions(unit, 4);
-      this.appendArenaControl(root, positions[0].x, positions[0].y, "<", unit.playerId, () => this.setActiveCommand("move", { direction: "backward" }), "Move backward", this.isCommandActive("move", "backward"));
+      const positions = this.controlRowPositions(unit, 3);
+      this.appendArenaControl(root, positions[0].x, positions[0].y, ">", unit.playerId, () => this.setActiveCommand("move"), "Move", this.isCommandActive("move"));
       this.appendArenaControl(root, positions[1].x, positions[1].y, "*", unit.playerId, () => this.setActiveCommand("pivot"), "Pivot", this.isCommandActive("pivot"));
-      this.appendArenaControl(root, positions[2].x, positions[2].y, ">", unit.playerId, () => this.setActiveCommand("move", { direction: "forward" }), "Move forward", this.isCommandActive("move", "forward"));
-      this.appendArenaControl(root, positions[3].x, positions[3].y, "~", unit.playerId, () => void this.skipActiveUnit(), "Skip");
+      this.appendArenaControl(root, positions[2].x, positions[2].y, "~", unit.playerId, () => void this.skipActiveUnit(), "Skip");
       if (this.activeCommand?.type === "move") {
-        this.appendMoveArrow(root, unit, this.activeCommand.direction);
+        this.appendMoveArrow(root, unit, "forward");
+        this.appendMoveArrow(root, unit, "backward");
       }
       if (this.activeCommand?.type === "pivot") {
         this.appendPivotStar(root, unit);
@@ -1149,7 +1152,13 @@ function createMiniswarApp() {
       const vector = this.moveVector(unit, direction);
       const distance = this.maxMoveDistance(unit, direction);
       const end = { x: start.x + vector.x * distance, y: start.y + vector.y * distance };
-      const group = this.svgElement("g", { class: `move-arrow p${unit.playerId}` });
+      const group = this.svgElement("g", { class: `move-arrow p${unit.playerId}`, "data-arena-control": `move-${direction}` });
+      group.addEventListener("click", (event) => {
+        event.stopPropagation();
+        void this.submitMoveAtPoint(this.arenaPoint(event), direction);
+      });
+      group.appendChild(this.svgElement("title")).textContent = direction === "backward" ? "Move backward" : "Move forward";
+      group.appendChild(this.svgElement("line", { class: "move-arrow-hit", x1: start.x, y1: start.y, x2: end.x, y2: end.y }));
       group.appendChild(this.svgElement("line", { x1: start.x, y1: start.y, x2: end.x, y2: end.y }));
       const head = this.controlSize() * 0.35;
       const angle = Math.atan2(vector.y, vector.x);

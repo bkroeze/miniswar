@@ -621,6 +621,13 @@ label {
   fill: var(--red);
 }
 
+.move-arrow line.move-arrow-hit {
+  stroke: transparent;
+  stroke-width: 22;
+  opacity: 0;
+  pointer-events: stroke;
+}
+
 .pivot-star {
   fill: #15130f;
   paint-order: stroke;

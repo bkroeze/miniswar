@@ -30,16 +30,16 @@ The current game screen asks the player to select a unit in the SVG arena, then 
 
 - R4. When a player is awaiting activation, selecting an activatable unit highlights it and renders a unit-adjacent `+` activation control; selecting another eligible unit moves the pending activation control.
 - R5. Activating through the `+` control calls the existing activate endpoint and updates the banner from the API result, including two-action success and one-action simple activation cases.
-- R6. Once a unit is activated, the UI renders unit-adjacent `<`, `*`, `>`, and `~` controls for backward move, pivot or rotate, forward move, and skip.
+- R6. Once a unit is activated, the UI renders unit-adjacent Move (`>`), pivot or rotate (`*`), and skip (`~`) controls; choosing Move opens both forward and backward movement bars.
 - R7. Pending combat choice remains playable after the right panel is removed.
 
 **Battlemap Input**
 
-- R8. Choosing forward or backward move draws a player-colored SVG arrow from the active unit in that direction to the maximum requestable movement for the current activation.
-- R9. Clicking along the move arrow submits the existing `move` action with direction and clicked distance; the server remains authoritative for terrain, collision, combat, and actual distance moved.
+- R8. Choosing Move draws player-colored SVG arrows forward and backward from the active unit to the maximum requestable movement for the current activation and direction.
+- R9. Clicking along either move arrow submits the existing `move` action with direction and clicked distance; the server remains authoritative for terrain, collision, combat, and actual distance moved.
 - R10. Choosing pivot highlights the pivot axis mini with a star, defaulting to the officer unless the player selects another mini on the active unit.
 - R11. While pivot mode is active, a battlemap click submits the existing `pivot` action toward that direction, except a click within 10 degrees of directly backward submits the existing `about_face` action.
-- R12. Clicking the any action control while another is active, for example clicking forward while pivot is active, changes the active action to the clicked control.
+- R12. Clicking any action control while another is active, for example clicking Move while pivot is active, changes the active action to the clicked control.
 - R13. Clicking the active action control again cancels the active action.
 
 **Project Constraints**
@@ -51,9 +51,9 @@ The current game screen asks the player to select a unit in the SVG arena, then 
 
 ## Key Technical Decisions
 
-- **Use transient Alpine interaction modes:** Add client-only state for pending activation, move direction, pivot targeting, and pending combat choice overlays. This keeps rewind and automation grounded in server state while letting the UI track in-progress pointer input.
+- **Use transient Alpine interaction modes:** Add client-only state for pending activation, move targeting, pivot targeting, and pending combat choice overlays. This keeps rewind and automation grounded in server state while letting the UI track in-progress pointer input.
 - **Render contextual controls inside the SVG:** Buttons, arrows, and pivot stars should be SVG elements appended by the existing render path so their positions share the same millimeter coordinate system as units and terrain.
-- **Keep the server as the rules authority:** The move arrow represents the maximum requestable distance from visible activation state, not a collision or terrain simulator. API messages and action results tell the player what actually happened.
+- **Keep the server as the rules authority:** The move arrows represent the maximum requestable distance from visible activation state, not a collision or terrain simulator. API messages and action results tell the player what actually happened.
 - **Reuse existing command methods:** `activate`, `takeAction`, and `resolveCombatChoice` can be reshaped or split into smaller helpers, but payloads should still target the existing `/activate` and `/actions` endpoints.
 - **Derive pivot input from the clicked point:** Do not use the existing 45-degree snapped direction convention for map-click facing. Instead derive the facing from the click position relative to the currently selected pivot figure's current position. If the click is within 10 degrees of directly backward from the unit's current facing, submit `about_face`; otherwise submit `pivot`.
 - **Preserve combat choice as a contextual exception:** Pending pushback, withdraw, or decline is already an action gate. Render it near the winning unit or in the left bar as a fallback, but do not leave it dependent on the removed right panel.
@@ -70,7 +70,7 @@ stateDiagram-v2
   PotentialActivation --> Activating: click +
   Activating --> ActiveUnit: activate API ok
   Activating --> AwaitingActivation: activate API error
-  ActiveUnit --> MoveTargeting: click < or >
+  ActiveUnit --> MoveTargeting: click Move
   MoveTargeting --> ActiveUnit: click arrow and action API ok
   ActiveUnit --> PivotTargeting: click *
   PivotTargeting --> ActiveUnit: click map and action API ok
@@ -87,7 +87,7 @@ flowchart TB
   ServerState --> Renderer[SVG arena renderer]
   UIState[Transient interaction mode] --> Renderer
   Renderer --> UnitControls[Unit-adjacent controls]
-  Renderer --> MoveArrow[Move arrow overlay]
+  Renderer --> MoveArrows[Move arrows overlay]
   Renderer --> PivotStar[Pivot axis star]
   Clicks[SVG clicks in world coordinates] --> Payloads[Existing action payloads]
   Payloads --> API[Existing game APIs]
@@ -139,7 +139,7 @@ flowchart TB
 - **Patterns to follow:** `renderArena()`, `localUnitBounds()`, `rotatePoint()`, `arenaPoint()`, and existing SVG element creation in `web/static/app.js`.
 - **Test scenarios:**
   - Selecting an eligible unit while awaiting activation renders only the `+` control for that unit.
-  - Activating a unit renders `<`, `*`, `>`, and `~` below that unit.
+  - Activating a unit renders Move (`>`), `*`, and `~` below that unit.
   - Zooming and panning keeps contextual controls visually attached to the correct unit.
   - Clicking contextual controls does not also trigger unit selection or placement handling.
   - Broken, unplaced, removed, enemy, or already-activated units do not receive activation controls.
@@ -167,15 +167,16 @@ flowchart TB
 - **Requirements:** R6, R8, R9, R14
 - **Dependencies:** U3, U4
 - **Files:** `web/static/app.js`, `web/static/app.css`, `web/templates/index.html`, `internal/game/engine_test.go`, `internal/server/server_test.go`
-- **Approach:** Add move-targeting mode for `forward` and `backward`. Compute the requestable maximum from `unit.movementLimitMm`, backward half distance, and `currentActivation.movesTaken`, then draw an arrow in the player's color along the unit facing vector. Convert arrow clicks into a projection distance clamped to the arrow length and submit the existing `move` payload with `direction` and `distanceMm`.
+- **Approach:** Add a move-targeting mode that draws both `forward` and `backward` arrows. Compute each requestable maximum from `unit.movementLimitMm`, backward half distance, and `currentActivation.movesTaken`, then draw the arrows in the player's color along the unit facing axis. Convert arrow clicks into a direction and projection distance clamped to that arrow length, then submit the existing `move` payload with `direction` and `distanceMm`.
 - **Patterns to follow:** Existing movement limit helper, current `takeAction("move")` payload shape, `arenaPoint()`, server movement tests, and engine movement limit tests.
 - **Test scenarios:**
-  - Clicking `>` draws a forward arrow from the active unit and does not move the unit yet.
-  - Clicking `<` draws a backward arrow capped at half the forward distance.
+  - Clicking Move (`>`) draws forward and backward arrows from the active unit and does not move the unit yet.
+  - The forward arrow is capped at the forward movement limit.
+  - The backward arrow is capped at half the forward distance.
   - A second move in the same activation draws an arrow capped at half the relevant first-move limit.
-  - Clicking halfway along the arrow submits a move distance near half the arrow length.
-  - Clicking near the arrow endpoint submits the maximum requestable distance.
-  - If terrain, collision, or combat changes the actual movement, Feedback shows the server result and the arrow clears.
+  - Clicking halfway along either arrow submits the correct direction with a move distance near half that arrow length.
+  - Clicking near either arrow endpoint submits that direction's maximum requestable distance.
+  - If terrain, collision, or combat changes the actual movement, Feedback shows the server result and move targeting clears.
 - **Verification:** Manual browser check covers forward and backward movement at partial and full distances, including second move, rough or blocked terrain, combat contact, and rewind.
 
 ### U6. Implement Pivot, About-Face, and Skip Controls
@@ -221,7 +222,7 @@ flowchart TB
 - **Patterns to follow:** Current `PLAN.md` UI and API inventory; existing package test organization; manual browser checklist already listed in `PLAN.md`.
 - **Test scenarios:**
   - Game creation, placement, activation, move, pivot, about-face, skip, combat pushback, history, and rewind still pass existing server and engine tests.
-  - Manual browser flow covers activation selection, `+`, movement arrows, pivot star, about-face, skip, combat choice, Feedback, History, zoom, pan, and rewind on a starter battlemap.
+  - Manual browser flow covers activation selection, `+`, the Move control, movement arrows, pivot star, about-face, skip, combat choice, Feedback, History, zoom, pan, and rewind on a starter battlemap.
   - Manual browser flow repeats movement and pivot while zoomed or panned on a larger battlemap to verify world-coordinate clicks.
   - No old right-panel action form remains reachable in play mode.
 - **Verification:** Package tests pass for existing API contracts, and browser verification proves the new SVG interaction flow works end to end.
@@ -232,8 +233,8 @@ flowchart TB
 
 - AE1. Given the game is awaiting activation for Player 1, when the player selects an eligible Player 1 unit, then the unit is highlighted, the banner shows `Player 1 - Activating`, and a `+` control appears below that unit.
 - AE2. Given a potential activation unit is selected, when the player selects a different eligible unit, then the highlight and `+` control move to the newly selected unit without making an API call.
-- AE3. Given the active unit has two actions, when activation succeeds, then the banner shows the first action state and `<`, `*`, `>`, and `~` controls appear below the active unit.
-- AE4. Given forward move mode is active, when the player clicks halfway along the forward arrow, then the UI submits a forward move request for that clicked distance and waits for server feedback before moving the unit visually.
+- AE3. Given the active unit has two actions, when activation succeeds, then the banner shows the first action state and Move (`>`), `*`, and `~` controls appear below the active unit.
+- AE4. Given move mode is active, when the player clicks halfway along either movement arrow, then the UI submits a move request for that direction and clicked distance and waits for server feedback before moving the unit visually.
 - AE5. Given pivot mode is active and the officer is the pivot axis, when the player clicks within 10 degrees of directly backward, then the UI submits `about_face` instead of `pivot`.
 - AE6. Given a move creates a pending combat choice, when the response returns, then normal action controls disappear and the legal combat-choice controls are available without the removed right panel.
 - AE7. Given several actions have been taken, when the player rewinds from History in the left bar, then transient move or pivot modes clear and the arena, banner, details, feedback, and history all match the rewound game state.
@@ -254,7 +255,7 @@ flowchart TB
 - Adding a dedicated browser automation harness for Alpine/SVG interactions.
 - Server-provided movement preview endpoints that account for terrain, collision, and combat before submitting a move.
 - New action types such as wheel, shooting, or special abilities.
-- Alternative iconography beyond the initial `+`, `<`, `*`, `>`, and `~` symbols.
+- Alternative iconography beyond the initial `+`, Move (`>`), `*`, `~`, and combat-choice symbols.
 
 ### Out of Scope
 

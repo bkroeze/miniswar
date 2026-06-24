@@ -39,6 +39,8 @@ function createMiniswarApp() {
 
     async initGame() {
       await Promise.all([this.loadBattlemaps(), this.loadArmies({ defaultSelections: true })]);
+      const loadedFromURL = await this.loadGameFromLocation();
+      if (loadedFromURL) return;
       this.ensureCameraForCurrentMap();
     },
 
@@ -249,16 +251,53 @@ function createMiniswarApp() {
       this.messages = [...(response.messages || []), ...(response.errors || [])];
     },
 
-    async loadGame(gameId) {
-      const response = await this.api(`/api/games/${gameId}`);
+    gameRouteReference() {
+      const match = window.location.pathname.match(/^\/games\/([^/]+)(?:\/steps\/(\d+))?\/?$/);
+      if (!match) return null;
+      return {
+        id: decodeURIComponent(match[1]),
+        step: match[2] === undefined ? null : Number(match[2]),
+      };
+    },
+
+    async loadGameFromLocation() {
+      const reference = this.gameRouteReference();
+      if (!reference) return false;
+      this.enterGameDisplay();
+      const path =
+        reference.step === null
+          ? `/api/games/${encodeURIComponent(reference.id)}`
+          : `/api/games/${encodeURIComponent(reference.id)}/steps/${reference.step}`;
+      const response = await this.api(path);
       if (response.ok) {
         this.placementPreview = null;
         this.loadGamesOpen = false;
         await this.setGame(response.game, { resetSelection: true });
-        this.messages = [`Loaded game ${gameId}.`];
-        return;
+        this.messages = [`Loaded game ${reference.id} at step ${this.gameStep(response.game)}.`];
+        return true;
       }
       this.messages = [...(response.messages || []), ...(response.errors || [])];
+      return true;
+    },
+
+    gameStep(game = this.game) {
+      return game?.actionHistory?.length || 0;
+    },
+
+    gameURL(game = this.game) {
+      if (!game?.id) return "/";
+      return `/games/${encodeURIComponent(game.id)}/steps/${this.gameStep(game)}`;
+    },
+
+    savedGameURL(saved) {
+      return `/games/${encodeURIComponent(saved.id)}/steps/${saved.actionCount || 0}`;
+    },
+
+    syncGameURL(game = this.game) {
+      if (!game?.id) return;
+      const nextPath = this.gameURL(game);
+      if (window.location.pathname === nextPath && !window.location.search && !window.location.hash) return;
+      window.history.replaceState({ gameId: game.id, step: this.gameStep(game) }, "", nextPath);
     },
 
     formatDate(value) {
@@ -642,6 +681,7 @@ function createMiniswarApp() {
     async setGame(game, options = {}) {
       const previousActivationUnitId = this.game?.currentActivation?.unitId || "";
       this.game = game;
+      if (options.syncURL !== false) this.syncGameURL(game);
       this.ensureCameraForCurrentMap();
       const activationUnit = this.currentActivationUnit();
       if (activationUnit && activationUnit.id !== previousActivationUnitId) {

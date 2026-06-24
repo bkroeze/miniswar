@@ -952,7 +952,7 @@ function createMiniswarApp() {
 
     async submitMoveAtPoint(point, requestedDirection = "") {
       const unit = this.currentActivationUnit();
-      if (!unit) return;
+      if (!unit || !this.canAct() || this.activeCommand?.type !== "move") return;
       const start = this.unitWorldCenter(unit);
       const forwardVector = this.moveVector(unit, "forward");
       const forwardProjection = (point.x - start.x) * forwardVector.x + (point.y - start.y) * forwardVector.y;

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -23,7 +24,13 @@ type Store struct {
 
 var memoryStoreID uint64
 
+// Open returns a SQLite-backed store for path.
+// Ordinary filesystem paths create missing parent directories before opening.
+// SQLite DSNs such as :memory: and file:... skip directory creation.
 func Open(path string) (*Store, error) {
+	if err := ensureSQLiteParentDir(path); err != nil {
+		return nil, err
+	}
 	db, err := sql.Open("sqlite", sqliteDSN(path))
 	if err != nil {
 		return nil, err
@@ -46,6 +53,17 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+func ensureSQLiteParentDir(path string) error {
+	if path == ":memory:" || strings.HasPrefix(path, "file:") {
+		return nil
+	}
+	dir := filepath.Dir(path)
+	if dir == "." || dir == "" {
+		return nil
+	}
+	return os.MkdirAll(dir, 0o755)
 }
 
 func sqliteDSN(path string) string {

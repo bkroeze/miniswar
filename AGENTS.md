@@ -2,6 +2,8 @@
 
 This is a Golang project, using sqlite for persistence of games and templUI for the browser UI.
 
+Single Server deployments mount persistent mutable app data at `/storage`; the production container should keep SQLite at `/storage/miniswar.sqlite`.
+
 React is overkill and is a bad match for SVG anyway, pick something else like Alpine or some SPA framework lighter than React for this, perhaps alpineJS, open to ideas here.
 
 It is imperative that any action in game can also be taken with full, useful feedback for AI and other automation.
@@ -15,4 +17,3 @@ Simulation of the arena will be done graphically, using a grid notated as if it 
 The entire play area should be done in SVG, not a canvas.  For initial work, we will simply draw squares with different border colors and symbols for mini type, officer status, etc.
 
 When minis move, they will move on this grid following the movement rules for minis and any special rules for the scenario, army, army races, personal power of the mini, or other environmental effect.
-

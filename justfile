@@ -4,6 +4,11 @@ addr := env_var_or_default("MINISWAR_ADDR", "127.0.0.1:8080")
 db := env_var_or_default("MINISWAR_DB", "miniswar.sqlite")
 gocache := env_var_or_default("GOCACHE", "/tmp/miniswar-go-build")
 gomodcache := env_var_or_default("GOMODCACHE", "/tmp/miniswar-go-mod")
+version_pkg := "miniswar/internal/version"
+version := `cat internal/version/VERSION`
+branch := `git rev-parse --abbrev-ref HEAD 2>/dev/null || true`
+default_branch := `git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##' || true`
+ldflags := "-X '" + version_pkg + ".baseVersion=" + version + "' -X '" + version_pkg + ".branchName=" + branch + "' -X '" + version_pkg + ".defaultBranch=" + default_branch + "'"
 
 default:
     @just --list
@@ -12,18 +17,18 @@ test:
     GOCACHE={{gocache}} GOMODCACHE={{gomodcache}} go test ./...
 
 build:
-    GOCACHE={{gocache}} GOMODCACHE={{gomodcache}} go build -buildvcs=false ./...
+    GOCACHE={{gocache}} GOMODCACHE={{gomodcache}} go build -buildvcs=false -ldflags "{{ldflags}}" ./...
 
 check: test build
 
 run:
-    GOCACHE={{gocache}} GOMODCACHE={{gomodcache}} go run -buildvcs=false ./cmd/miniswar -addr {{addr}} -db {{db}}
+    GOCACHE={{gocache}} GOMODCACHE={{gomodcache}} go run -buildvcs=false -ldflags "{{ldflags}}" ./cmd/miniswar -addr {{addr}} -db {{db}}
 
 run-local port:
-    GOCACHE={{gocache}} GOMODCACHE={{gomodcache}} go run -buildvcs=false ./cmd/miniswar -addr 10.0.10.23:{{port}} -db /tmp/miniswar-{{port}}.sqlite
+    GOCACHE={{gocache}} GOMODCACHE={{gomodcache}} go run -buildvcs=false -ldflags "{{ldflags}}" ./cmd/miniswar -addr 10.0.10.23:{{port}} -db /tmp/miniswar-{{port}}.sqlite
 
 run-port port:
-    GOCACHE={{gocache}} GOMODCACHE={{gomodcache}} go run -buildvcs=false ./cmd/miniswar -addr 127.0.0.1:{{port}} -db /tmp/miniswar-{{port}}.sqlite
+    GOCACHE={{gocache}} GOMODCACHE={{gomodcache}} go run -buildvcs=false -ldflags "{{ldflags}}" ./cmd/miniswar -addr 127.0.0.1:{{port}} -db /tmp/miniswar-{{port}}.sqlite
 
 fmt:
     gofmt -w cmd internal

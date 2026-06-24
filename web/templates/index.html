@@ -46,6 +46,10 @@
       </div>
     </section>
     <section class="landing-art" aria-label="Miniswar hero artwork"></section>
+    <footer class="landing-footer">
+      <span>Version {{.Version}}</span>
+      <span>Copyright (c) 2026 Bruce Kroeze</span>
+    </footer>
   </main>
 
   <main class="shell" x-show="!showLanding()" x-cloak :class="{ 'setup-active': isSetupPhase(), 'setup-collapsed': setupSidebarCollapsed }">

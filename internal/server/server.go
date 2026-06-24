@@ -14,6 +14,7 @@ import (
 
 	"miniswar/internal/game"
 	"miniswar/internal/store"
+	"miniswar/internal/version"
 )
 
 type Server struct {
@@ -23,6 +24,10 @@ type Server struct {
 	armiesTmpl     *template.Template
 	battlemapsTmpl *template.Template
 	startedAt      time.Time
+}
+
+type indexPageData struct {
+	Version string
 }
 
 func New(store *store.Store, engine *game.Engine) *Server {
@@ -91,7 +96,7 @@ func (s *Server) healthcheck(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = s.indexTmpl.Execute(w, nil)
+	_ = s.indexTmpl.Execute(w, indexPageData{Version: version.Display()})
 }
 
 func (s *Server) armiesPage(w http.ResponseWriter, r *http.Request) {

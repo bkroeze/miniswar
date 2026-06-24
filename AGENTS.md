@@ -4,6 +4,8 @@ This is a Golang project, using sqlite for persistence of games and templUI for 
 
 Single Server deployments mount persistent mutable app data at `/storage`; the production container should keep SQLite at `/storage/miniswar.sqlite`.
 
+The base app version lives in `internal/version/VERSION`. Local `just build`, `just run`, `just run-local`, and `just run-port` pass the current git branch to the binary with ldflags, so feature branches render versions like `0.1-fm-branch`; Docker builds accept `APP_VERSION`, `APP_BRANCH`, and `APP_DEFAULT_BRANCH` build args. `.github/workflows/bump-version.yml` increments the minor decimal version after merged PRs, skipping the initial `fm/miniswar-version-f9` versioning PR.
+
 React is overkill and is a bad match for SVG anyway, pick something else like Alpine or some SPA framework lighter than React for this, perhaps alpineJS, open to ideas here.
 
 It is imperative that any action in game can also be taken with full, useful feedback for AI and other automation.

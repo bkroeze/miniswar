@@ -7,6 +7,8 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
 ## Key Changes
 
 - `cmd/miniswar` starts the HTTP server with `-addr` and `-db` flags. Local runs default to `miniswar.sqlite`; the production container passes `-db /storage/miniswar.sqlite` for Single Server persistent storage.
+- `internal/version/VERSION` stores the base app version. Local `just` builds and runs pass the current branch through ldflags, Docker builds accept `APP_VERSION`, `APP_BRANCH`, and `APP_DEFAULT_BRANCH`, and branch builds display a sanitized `base-branch` suffix while default-branch builds display the bare base version.
+- `.github/workflows/bump-version.yml` increments the minor decimal base version after merged PRs, skipping the initial `fm/miniswar-version-f9` versioning PR.
 - `internal/game` owns rules, state transitions, layouts, activation, movement, combat, morale, legal actions, and rewind snapshots.
 - `internal/store` persists games, snapshots, the imported unit catalog, army templates, and army rosters in SQLite. Ordinary filesystem database paths create missing parent directories before opening; `:memory:` and `file:` SQLite DSNs skip parent directory handling.
 - `web` serves the landing page, management pages, CSS, Alpine.js, and SVG rendering.
@@ -26,6 +28,7 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
   - `GET /armies` renders the army template and roster manager.
   - `GET /battlemaps` renders the reusable battlemap library and rectangular terrain editor.
   - `GET /static/*` serves CSS, JavaScript, and Alpine.js.
+- The landing page footer renders the display version and `Copyright (c) 2026 Bruce Kroeze`.
 - Catalog API:
   - `GET /api/catalog/units?nation=&terrain=` returns catalog units, optionally filtered by exact nation and terrain.
   - `GET /api/catalog/filters` returns available `nations` and `terrains`.
@@ -101,8 +104,9 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
 - Unit tests for activation success/failure, disordered activation, legal action gating, movement limits, and failed-activation simple action limits.
 - Unit tests for combat alignment, dice, target numbers, hit allocation, officer-safe casualties, morale, broken cascades, pushback/withdraw/decline, and win completion.
 - Store tests for catalog import, filters, template CRUD, roster CRUD, battlemap CRUD, validation, army-to-game setup conversion, filesystem parent directory creation, and idempotent reopen behavior that preserves user-created rows.
-- HTTP tests for catalog endpoints, army endpoints, battlemap endpoints, create game, copied game battlemaps, place units, activate, apply actions, combat pushback, list actions, persistence, rewind, and read-only historical step lookup.
-- Manual browser check: manage templates/rosters/battlemaps, create a game from rosters, place units, zoom/pan/fit the SVG arena, activate with the unit-adjacent `+`, open the move control and click forward/backward movement bars, reload the saved game and repeat movement, pivot/about-face from battlemap clicks, skip with `~`, enter combat, resolve pushback, rewind, open a saved game URL at the latest step, open an earlier step URL, and verify SVG updates, banner text, left-bar history, URL tracking, read-only historical state, and action feedback.
+- Version tests for base/default-branch display, branch suffix derivation, and branch-name sanitization.
+- HTTP tests for catalog endpoints, army endpoints, battlemap endpoints, create game, copied game battlemaps, place units, activate, apply actions, combat pushback, list actions, persistence, rewind, read-only historical step lookup, and the landing footer version/copyright text.
+- Manual browser check: manage templates/rosters/battlemaps, create a game from rosters, place units, zoom/pan/fit the SVG arena, activate with the unit-adjacent `+`, open the move control and click forward/backward movement bars, reload the saved game and repeat movement, pivot/about-face from battlemap clicks, skip with `~`, enter combat, resolve pushback, rewind, open a saved game URL at the latest step, open an earlier step URL, and verify SVG updates, banner text, left-bar history, URL tracking, read-only historical state, landing footer, and action feedback.
 
 ## Assumptions
 

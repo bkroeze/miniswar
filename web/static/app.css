@@ -109,6 +109,7 @@ h3 {
   min-height: calc(100vh - 76px);
   display: grid;
   grid-template-columns: minmax(320px, 0.88fr) minmax(320px, 1.12fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: clamp(1rem, 3vw, 3rem);
   padding: clamp(1rem, 4vw, 3.5rem);
   align-items: stretch;
@@ -196,6 +197,18 @@ h3 {
     url("/static/miniswar-hero.png") center / auto 100% no-repeat,
     #d8ceba;
   overflow: hidden;
+}
+
+.landing-footer {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem 1rem;
+  color: rgba(98, 95, 85, 0.72);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  text-align: center;
 }
 
 .shell {

@@ -12,7 +12,28 @@ import (
 
 	"miniswar/internal/game"
 	"miniswar/internal/store"
+	"miniswar/internal/version"
 )
+
+func TestIndexIncludesVersionAndCopyright(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	srv := New(st, game.NewEngine(1)).Routes()
+	res := request(t, srv, http.MethodGet, "/", "")
+	if res.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", res.Code, res.Body.String())
+	}
+	body := res.Body.String()
+	for _, want := range []string{"Version " + version.Display(), "Copyright (c) 2026 Bruce Kroeze"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("index missing %q in body:\n%s", want, body)
+		}
+	}
+}
 
 func TestHealthcheckIncludesUptime(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))

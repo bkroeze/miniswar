@@ -6,7 +6,13 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -buildvcs=false -trimpath=false -o /out/miniswar ./cmd/miniswar
+ARG APP_VERSION
+ARG APP_BRANCH
+ARG APP_DEFAULT_BRANCH=main
+RUN APP_VERSION="${APP_VERSION:-$(cat internal/version/VERSION)}" \
+	&& CGO_ENABLED=0 go build -buildvcs=false -trimpath=false \
+		-ldflags "-X 'miniswar/internal/version.baseVersion=${APP_VERSION}' -X 'miniswar/internal/version.branchName=${APP_BRANCH}' -X 'miniswar/internal/version.defaultBranch=${APP_DEFAULT_BRANCH}'" \
+		-o /out/miniswar ./cmd/miniswar
 
 FROM debian:bookworm-slim
 

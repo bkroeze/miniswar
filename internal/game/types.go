@@ -290,6 +290,7 @@ type APIResponse struct {
 	Action       *ActionRecord `json:"action,omitempty"`
 	Roll         []int         `json:"roll,omitempty"`
 	LegalActions []string      `json:"legalActions,omitempty"`
+	ReadOnly     bool          `json:"readOnly,omitempty"`
 	Messages     []string      `json:"messages"`
 	Errors       []string      `json:"errors,omitempty"`
 }

@@ -244,7 +244,7 @@ func (s *Server) getGameStep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stepGame.Snapshots = g.Snapshots
-	writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Game: stepGame, LegalActions: game.LegalActions(stepGame)})
+	writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Game: stepGame, LegalActions: game.LegalActions(stepGame), ReadOnly: true})
 }
 
 func (s *Server) placeUnit(w http.ResponseWriter, r *http.Request) {

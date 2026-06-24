@@ -312,6 +312,9 @@ func TestGetGameStepReturnsSnapshotWithoutRewindingCurrentGame(t *testing.T) {
 	if len(step0.Game.ActionHistory) != 0 {
 		t.Fatalf("step 0 action history len = %d, want 0", len(step0.Game.ActionHistory))
 	}
+	if !step0.ReadOnly {
+		t.Fatal("step 0 response should be read-only")
+	}
 	if unitByID(step0.Game, unit.ID).Placed {
 		t.Fatalf("step 0 should show %s before placement", unit.ID)
 	}
@@ -331,6 +334,9 @@ func TestGetGameStepReturnsSnapshotWithoutRewindingCurrentGame(t *testing.T) {
 	}
 	if len(step1.Game.ActionHistory) != 1 || !unitByID(step1.Game, unit.ID).Placed {
 		t.Fatalf("step 1 should match current game after one action: actions=%d unit=%#v", len(step1.Game.ActionHistory), unitByID(step1.Game, unit.ID))
+	}
+	if step1.ReadOnly {
+		t.Fatal("current step response should be writable")
 	}
 
 	res = request(t, srv, http.MethodGet, "/games/"+created.Game.ID+"/steps/1", "")

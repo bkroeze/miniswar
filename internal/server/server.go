@@ -40,6 +40,8 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthcheck", s.healthcheck)
 	mux.HandleFunc("GET /", s.index)
+	mux.HandleFunc("GET /games/{id}", s.index)
+	mux.HandleFunc("GET /games/{id}/steps/{step}", s.index)
 	mux.HandleFunc("GET /armies", s.armiesPage)
 	mux.HandleFunc("GET /battlemaps", s.battlemapsPage)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
@@ -68,6 +70,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/games", s.createGame)
 	mux.HandleFunc("GET /api/games", s.listGames)
 	mux.HandleFunc("GET /api/games/{id}", s.getGame)
+	mux.HandleFunc("GET /api/games/{id}/steps/{step}", s.getGameStep)
 	mux.HandleFunc("POST /api/games/{id}/placements", s.placeUnit)
 	mux.HandleFunc("POST /api/games/{id}/activate", s.activate)
 	mux.HandleFunc("POST /api/games/{id}/actions", s.action)
@@ -196,6 +199,52 @@ func (s *Server) getGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Game: g, LegalActions: game.LegalActions(g)})
+}
+
+func (s *Server) getGameStep(w http.ResponseWriter, r *http.Request) {
+	step, err := strconv.Atoi(r.PathValue("step"))
+	if err != nil || step < 0 {
+		writeErrorMessage(w, http.StatusBadRequest, "step must be a non-negative integer")
+		return
+	}
+	g, err := s.store.GetGame(r.PathValue("id"))
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sql.ErrNoRows) {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err)
+		return
+	}
+	currentStep := len(g.ActionHistory)
+	switch {
+	case step == currentStep:
+		writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Game: g, LegalActions: game.LegalActions(g)})
+		return
+	case step > currentStep:
+		writeErrorMessage(w, http.StatusNotFound, "game step "+strconv.Itoa(step)+" not found")
+		return
+	}
+	snapshotIndex := step
+	if step == 0 {
+		snapshotIndex = -1
+	}
+	state, err := s.store.Snapshot(g.ID, snapshotIndex)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sql.ErrNoRows) {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err)
+		return
+	}
+	stepGame, err := game.Restore(state)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	stepGame.Snapshots = g.Snapshots
+	writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Game: stepGame, LegalActions: game.LegalActions(stepGame), ReadOnly: true})
 }
 
 func (s *Server) placeUnit(w http.ResponseWriter, r *http.Request) {

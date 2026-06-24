@@ -9,6 +9,7 @@ function createMiniswarApp() {
     newGameConfigOpen: false,
     loadGamesOpen: false,
     displayMode: "landing",
+    gameReadOnly: false,
     savedGames: [],
     savedGamesLoading: false,
     armies: [],
@@ -39,6 +40,8 @@ function createMiniswarApp() {
 
     async initGame() {
       await Promise.all([this.loadBattlemaps(), this.loadArmies({ defaultSelections: true })]);
+      const loadedFromURL = await this.loadGameFromLocation();
+      if (loadedFromURL) return;
       this.ensureCameraForCurrentMap();
     },
 
@@ -114,7 +117,7 @@ function createMiniswarApp() {
       });
       if (response.ok) {
         this.newGameConfigOpen = false;
-        await this.setGame(response.game, { resetSelection: true });
+        await this.setGame(response.game, { resetSelection: true, readOnly: false });
       }
       this.messages = [...(response.messages || []), ...(response.errors || [])];
     },
@@ -249,16 +252,71 @@ function createMiniswarApp() {
       this.messages = [...(response.messages || []), ...(response.errors || [])];
     },
 
-    async loadGame(gameId) {
-      const response = await this.api(`/api/games/${gameId}`);
+    gameRouteReference() {
+      const match = window.location.pathname.match(/^\/games\/([^/]+)(?:\/steps\/(\d+))?\/?$/);
+      if (!match) return null;
+      return {
+        id: decodeURIComponent(match[1]),
+        step: match[2] === undefined ? null : Number(match[2]),
+      };
+    },
+
+    async loadGameFromLocation() {
+      const reference = this.gameRouteReference();
+      if (!reference) return false;
+      this.enterGameDisplay();
+      const path =
+        reference.step === null
+          ? `/api/games/${encodeURIComponent(reference.id)}`
+          : `/api/games/${encodeURIComponent(reference.id)}/steps/${reference.step}`;
+      const response = await this.api(path);
       if (response.ok) {
         this.placementPreview = null;
         this.loadGamesOpen = false;
-        await this.setGame(response.game, { resetSelection: true });
-        this.messages = [`Loaded game ${gameId}.`];
-        return;
+        await this.setGame(response.game, { resetSelection: true, readOnly: Boolean(response.readOnly) });
+        this.messages = [`Loaded game ${reference.id} at step ${this.gameStep(response.game)}.`];
+        if (this.isReadOnlyGame()) this.messages.push(this.readOnlyGameMessage());
+        return true;
       }
       this.messages = [...(response.messages || []), ...(response.errors || [])];
+      return true;
+    },
+
+    gameStep(game = this.game) {
+      return game?.actionHistory?.length || 0;
+    },
+
+    gameURL(game = this.game) {
+      if (!game?.id) return "/";
+      return `/games/${encodeURIComponent(game.id)}/steps/${this.gameStep(game)}`;
+    },
+
+    savedGameURL(saved) {
+      return `/games/${encodeURIComponent(saved.id)}/steps/${saved.actionCount || 0}`;
+    },
+
+    syncGameURL(game = this.game) {
+      if (!game?.id) return;
+      const nextPath = this.gameURL(game);
+      if (window.location.pathname === nextPath && !window.location.search && !window.location.hash) return;
+      window.history.replaceState({ gameId: game.id, step: this.gameStep(game) }, "", nextPath);
+    },
+
+    isReadOnlyGame() {
+      return Boolean(this.gameReadOnly);
+    },
+
+    readOnlyGameMessage() {
+      return "Historical game steps are read-only. Open the latest step to continue playing.";
+    },
+
+    rejectReadOnlyAction() {
+      if (!this.isReadOnlyGame()) return false;
+      this.placementPreview = null;
+      this.clearActiveCommand();
+      this.messages = [this.readOnlyGameMessage()];
+      this.renderArena();
+      return true;
     },
 
     formatDate(value) {
@@ -269,6 +327,7 @@ function createMiniswarApp() {
     },
 
     async activate() {
+      if (this.rejectReadOnlyAction()) return;
       const unit = this.selectedActivatableUnit();
       if (!unit) return;
       this.clearActiveCommand();
@@ -283,6 +342,7 @@ function createMiniswarApp() {
     },
 
     async confirmPlacement() {
+      if (this.rejectReadOnlyAction()) return;
       const unit = this.currentPlacementUnit();
       if (!unit || !this.placementPreview) return;
       const response = await this.api(`/api/games/${this.game.id}/placements`, {
@@ -306,6 +366,7 @@ function createMiniswarApp() {
     },
 
     async takeAction(type) {
+      if (this.rejectReadOnlyAction()) return;
       const unit = this.currentActivationUnit();
       if (!unit) return;
       const payload = { playerId: unit.playerId, unitId: unit.id, type };
@@ -323,6 +384,7 @@ function createMiniswarApp() {
     },
 
     async resolveCombatChoice(combatChoice) {
+      if (this.rejectReadOnlyAction()) return;
       const choice = this.pendingCombatChoice();
       if (!choice) return;
       this.clearActiveCommand();
@@ -342,6 +404,7 @@ function createMiniswarApp() {
     },
 
     async rewind(actionIndex) {
+      if (this.rejectReadOnlyAction()) return;
       const response = await this.api(`/api/games/${this.game.id}/rewind`, {
         method: "POST",
         body: JSON.stringify({ actionIndex }),
@@ -496,11 +559,11 @@ function createMiniswarApp() {
     },
 
     canActivate() {
-      return this.game && !this.pendingCombatChoice() && !this.game.currentActivation && Boolean(this.selectedActivatableUnit());
+      return this.game && !this.isReadOnlyGame() && !this.pendingCombatChoice() && !this.game.currentActivation && Boolean(this.selectedActivatableUnit());
     },
 
     canAct() {
-      return Boolean(this.game?.currentActivation && !this.pendingCombatChoice());
+      return Boolean(this.game?.currentActivation && !this.isReadOnlyGame() && !this.pendingCombatChoice());
     },
 
     isCommandActive(type, direction = "") {
@@ -593,6 +656,7 @@ function createMiniswarApp() {
     statusLine() {
       if (this.showLanding()) return "Choose how to begin";
       if (!this.game) return "Loading";
+      if (this.isReadOnlyGame()) return `Read-only step ${this.gameStep()}`;
       if (this.game.phase === "complete") {
         return this.game.winnerPlayerId ? `Game complete: player ${this.game.winnerPlayerId} wins` : "Game complete: draw";
       }
@@ -613,6 +677,7 @@ function createMiniswarApp() {
 
     gameplayBanner() {
       if (!this.game) return "";
+      if (this.isReadOnlyGame()) return `Read-only Historical Step ${this.gameStep()}`;
       if (this.game.phase === "complete") {
         return this.game.winnerPlayerId ? `Game Complete - Player ${this.game.winnerPlayerId} Wins` : "Game Complete - Draw";
       }
@@ -642,6 +707,12 @@ function createMiniswarApp() {
     async setGame(game, options = {}) {
       const previousActivationUnitId = this.game?.currentActivation?.unitId || "";
       this.game = game;
+      if (options.readOnly !== undefined) this.gameReadOnly = Boolean(options.readOnly);
+      if (this.isReadOnlyGame()) {
+        this.placementPreview = null;
+        this.clearActiveCommand();
+      }
+      if (options.syncURL !== false) this.syncGameURL(game);
       this.ensureCameraForCurrentMap();
       const activationUnit = this.currentActivationUnit();
       if (activationUnit && activationUnit.id !== previousActivationUnitId) {
@@ -764,6 +835,10 @@ function createMiniswarApp() {
       const clickedUnit = event.target.closest("[data-unit]");
       const clickedControl = event.target.closest("[data-arena-control]");
       if (clickedControl) return;
+      if (this.isReadOnlyGame()) {
+        if (!clickedUnit) this.rejectReadOnlyAction();
+        return;
+      }
       if (!this.isSetupPhase()) {
         if (clickedUnit) return;
         await this.handleActionMapClick(event);
@@ -1012,7 +1087,7 @@ function createMiniswarApp() {
       const root = this.$refs.overlays;
       if (!root) return;
       root.replaceChildren();
-      if (!this.game || this.isSetupPhase()) return;
+      if (!this.game || this.isReadOnlyGame() || this.isSetupPhase()) return;
       if (this.pendingCombatChoice()) {
         this.renderCombatChoiceOverlay(root);
         return;

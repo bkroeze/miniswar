@@ -19,5 +19,5 @@ Current implemented scope:
 - the app now supports saved army templates and rosters built from the imported unit catalog in `data/units.json`.
 - games may start from one roster per player, or from manual setup units.
 - battlemaps are reusable SQLite-backed assets with map dimensions and rectangular terrain zones, and each started game stores its own copied battlemap definition.
-- the SVG arena supports multi-unit placement, activation, movement, pivot, about-face, skip, move into combat, combat resolution, morale, pending pushback/withdraw choices, win completion, action history, rewind, and zoom/pan camera controls.
+- the SVG arena supports multi-unit placement, activation, movement, pivot, about-face, skip, move into combat, combat resolution, morale, pending pushback/withdraw choices, win completion, action history, rewind, URL-addressable game steps, and zoom/pan camera controls.
 - wheel movement, shooting, special ability execution, sockets, and multiplayer auth are still deferred.

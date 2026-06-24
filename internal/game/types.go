@@ -290,8 +290,10 @@ type APIResponse struct {
 	Action       *ActionRecord `json:"action,omitempty"`
 	Roll         []int         `json:"roll,omitempty"`
 	LegalActions []string      `json:"legalActions,omitempty"`
-	Messages     []string      `json:"messages"`
-	Errors       []string      `json:"errors,omitempty"`
+	// ReadOnly marks historical step responses that clients should not mutate.
+	ReadOnly bool     `json:"readOnly,omitempty"`
+	Messages []string `json:"messages"`
+	Errors   []string `json:"errors,omitempty"`
 }
 
 type GameSummary struct {

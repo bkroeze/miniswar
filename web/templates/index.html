@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Miniswar</title>
   <link rel="stylesheet" href="/static/app.css?v=landing-20260617">
-  <script defer src="/static/app.js?v=landing-20260617"></script>
+  <script defer src="/static/app.js?v=url-steps-20260624"></script>
   <script defer src="/static/alpine.min.js"></script>
 </head>
 <body x-data="miniswar" x-init="initGame()">
@@ -106,7 +106,7 @@
           <p x-text="pendingCombatChoice() ? `${pendingCombatChoice().winningUnitId} won against ${pendingCombatChoice().losingUnitId}` : ''"></p>
           <div class="choice-grid">
             <template x-for="choice in pendingCombatChoice()?.choices || []" :key="choice">
-              <button type="button" @click="resolveCombatChoice(choice)" x-text="combatChoiceLabel(choice)"></button>
+              <button type="button" @click="resolveCombatChoice(choice)" :disabled="isReadOnlyGame()" x-text="combatChoiceLabel(choice)"></button>
             </template>
           </div>
         </section>
@@ -123,7 +123,7 @@
           <ol class="history">
             <template x-for="action in game?.actionHistory || []" :key="action.index">
               <li>
-                <button type="button" @click="rewind(action.index)">rewind</button>
+                <button type="button" @click="rewind(action.index)" :disabled="isReadOnlyGame()">rewind</button>
                 <span x-text="`${action.index}: ${action.type} ${action.unitId || ''}`"></span>
               </li>
             </template>
@@ -133,10 +133,10 @@
     </section>
 
     <section class="arena-panel">
-      <div class="gameplay-banner" x-show="game && !isSetupPhase()" x-text="gameplayBanner()"></div>
+      <div class="gameplay-banner" x-show="game && (isReadOnlyGame() || !isSetupPhase())" x-text="gameplayBanner()"></div>
       <div class="placement-hud" x-show="isSetupPhase()">
         <span x-text="selectedUnitLabel()"></span>
-        <button type="button" @click="confirmPlacement()" :disabled="!placementPreview">Confirm</button>
+        <button type="button" @click="confirmPlacement()" :disabled="isReadOnlyGame() || !placementPreview">Confirm</button>
         <span class="placement-message" x-text="messages[0] || ''"></span>
       </div>
       <div class="arena-toolbar">
@@ -302,7 +302,7 @@
               <td x-text="`Round ${saved.round}, ${saved.phase}`"></td>
               <td x-text="`${saved.actionCount} / ${saved.snapshotCount}`"></td>
               <td>
-                <button type="button" @click="loadGame(saved.id)">Load</button>
+                <a class="button-link" :href="savedGameURL(saved)">Open</a>
               </td>
             </tr>
           </template>

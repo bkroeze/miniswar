@@ -15,6 +15,8 @@ var (
 	defaultBranch = "main"
 )
 
+// Base returns the ldflag-provided base version, then the embedded VERSION file,
+// and finally 0.0 if neither source is available.
 func Base() string {
 	base := strings.TrimSpace(baseVersion)
 	if base == "" {
@@ -26,10 +28,13 @@ func Base() string {
 	return base
 }
 
+// Display returns the version string intended for UI display.
 func Display() string {
 	return DisplayVersion(Base(), branchName, defaultBranch)
 }
 
+// DisplayVersion returns the base version for default-branch builds and appends
+// a sanitized branch suffix for non-default branch builds.
 func DisplayVersion(base, branch, defaultBranch string) string {
 	base = strings.TrimSpace(base)
 	if base == "" {
@@ -50,6 +55,7 @@ func DisplayVersion(base, branch, defaultBranch string) string {
 	return base + "-" + suffix
 }
 
+// SanitizeBranch normalizes a git branch name into a lower-case display suffix.
 func SanitizeBranch(branch string) string {
 	branch = strings.TrimSpace(branch)
 	branch = strings.TrimPrefix(branch, "refs/heads/")

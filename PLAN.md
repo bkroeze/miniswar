@@ -7,6 +7,8 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
 ## Key Changes
 
 - `cmd/miniswar` starts the HTTP server with `-addr` and `-db` flags. Local runs default to `miniswar.sqlite`; the production container passes `-db /storage/miniswar.sqlite` for Single Server persistent storage.
+- `internal/version/VERSION` stores the base app version. Local `just` builds and runs pass the current branch through ldflags, Docker builds accept `APP_VERSION`, `APP_BRANCH`, and `APP_DEFAULT_BRANCH`, and branch builds display a sanitized `base-branch` suffix while default-branch builds display the bare base version.
+- `.github/workflows/bump-version.yml` increments the minor decimal base version after merged PRs, skipping the initial `fm/miniswar-version-f9` versioning PR.
 - `internal/game` owns rules, state transitions, layouts, activation, movement, combat, morale, legal actions, and rewind snapshots.
 - `internal/store` persists games, snapshots, the imported unit catalog, army templates, and army rosters in SQLite. Ordinary filesystem database paths create missing parent directories before opening; `:memory:` and `file:` SQLite DSNs skip parent directory handling.
 - `web` serves the landing page, management pages, CSS, Alpine.js, and SVG rendering.
@@ -26,6 +28,7 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
   - `GET /armies` renders the army template and roster manager.
   - `GET /battlemaps` renders the reusable battlemap library and rectangular terrain editor.
   - `GET /static/*` serves CSS, JavaScript, and Alpine.js.
+- The landing page footer renders the display version and `Copyright (c) 2026 Bruce Kroeze`.
 - Catalog API:
   - `GET /api/catalog/units?nation=&terrain=` returns catalog units, optionally filtered by exact nation and terrain.
   - `GET /api/catalog/filters` returns available `nations` and `terrains`.

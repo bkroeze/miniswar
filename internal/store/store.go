@@ -24,6 +24,9 @@ type Store struct {
 
 var memoryStoreID uint64
 
+// Open returns a SQLite-backed store for path.
+// Ordinary filesystem paths create missing parent directories before opening.
+// SQLite DSNs such as :memory: and file:... skip directory creation.
 func Open(path string) (*Store, error) {
 	if err := ensureSQLiteParentDir(path); err != nil {
 		return nil, err

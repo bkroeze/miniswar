@@ -6,9 +6,9 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
 
 ## Key Changes
 
-- `cmd/miniswar` starts the HTTP server with `-addr` and `-db` flags.
+- `cmd/miniswar` starts the HTTP server with `-addr` and `-db` flags. Local runs default to `miniswar.sqlite`; the production container passes `-db /storage/miniswar.sqlite` for Single Server persistent storage.
 - `internal/game` owns rules, state transitions, layouts, activation, movement, combat, morale, legal actions, and rewind snapshots.
-- `internal/store` persists games, snapshots, the imported unit catalog, army templates, and army rosters in SQLite.
+- `internal/store` persists games, snapshots, the imported unit catalog, army templates, and army rosters in SQLite. Ordinary filesystem database paths create missing parent directories before opening; `:memory:` and `file:` SQLite DSNs skip parent directory handling.
 - `web` serves the landing page, management pages, CSS, Alpine.js, and SVG rendering.
 - The store imports `data/units.json` into `catalog_units` and `catalog_unit_terrains` when it opens.
 - The arena is rendered entirely in SVG using millimeter coordinates. Minis are rectangles sized by base dimensions, with unit/player color, facing indicator, mini key, officer marking, status styling, engagement styling, and contextual unit-adjacent controls.
@@ -100,7 +100,7 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
 - Unit tests for base-size validation, max unit size, rank layout, officer placement, mini key stability, and catalog-derived movement/health.
 - Unit tests for activation success/failure, disordered activation, legal action gating, movement limits, and failed-activation simple action limits.
 - Unit tests for combat alignment, dice, target numbers, hit allocation, officer-safe casualties, morale, broken cascades, pushback/withdraw/decline, and win completion.
-- Store tests for catalog import, filters, template CRUD, roster CRUD, battlemap CRUD, validation, and army-to-game setup conversion.
+- Store tests for catalog import, filters, template CRUD, roster CRUD, battlemap CRUD, validation, army-to-game setup conversion, filesystem parent directory creation, and idempotent reopen behavior that preserves user-created rows.
 - HTTP tests for catalog endpoints, army endpoints, battlemap endpoints, create game, copied game battlemaps, place units, activate, apply actions, combat pushback, list actions, persistence, rewind, and read-only historical step lookup.
 - Manual browser check: manage templates/rosters/battlemaps, create a game from rosters, place units, zoom/pan/fit the SVG arena, activate with the unit-adjacent `+`, open the move control and click forward/backward movement bars, reload the saved game and repeat movement, pivot/about-face from battlemap clicks, skip with `~`, enter combat, resolve pushback, rewind, open a saved game URL at the latest step, open an earlier step URL, and verify SVG updates, banner text, left-bar history, URL tracking, read-only historical state, and action feedback.
 

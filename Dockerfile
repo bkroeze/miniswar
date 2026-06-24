@@ -13,8 +13,8 @@ FROM debian:bookworm-slim
 WORKDIR /app
 
 RUN useradd --create-home --uid 10001 miniswar \
-	&& mkdir -p /data \
-	&& chown -R miniswar:miniswar /app /data
+	&& mkdir -p /storage \
+	&& chown -R miniswar:miniswar /app /storage
 
 COPY --from=build /out/miniswar /app/miniswar
 COPY --from=build --chown=miniswar:miniswar /app/data /app/data
@@ -23,7 +23,7 @@ COPY --from=build --chown=miniswar:miniswar /app/web /app/web
 USER miniswar
 
 EXPOSE 8080
-VOLUME ["/data"]
+VOLUME ["/storage"]
 
 ENTRYPOINT ["/app/miniswar"]
-CMD ["-addr", "0.0.0.0:8080", "-db", "/data/miniswar.sqlite"]
+CMD ["-addr", "0.0.0.0:8080", "-db", "/storage/miniswar.sqlite"]

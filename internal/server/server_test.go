@@ -378,6 +378,89 @@ func TestGetGameIncludesShootLegalActionDetails(t *testing.T) {
 	}
 }
 
+func TestHTTPShootActionPersistsFeedbackRejectsRepeatAndRewinds(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	engine := game.NewEngine(3)
+	g, err := engine.NewGame(game.Setup{
+		Player1: game.UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, Stats: game.UnitStats{A: 20, D: 8, CD: 1, H: 1}, Equipment: []string{"Bow"}},
+		Player2: game.UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, MaxHealth: 3, CurrentHealth: 3, CurrentHealthSet: true, Stats: game.UnitStats{A: 11, D: 1, CD: 1, H: 3}, Special: []string{"Shielding (1)"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Phase = "activated"
+	g.ActivePlayer = 1
+	g.CurrentActivation = &game.Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 2}
+	g.Units[0].Placed = true
+	g.Units[0].X = 100
+	g.Units[0].Y = 300
+	g.Units[0].FacingDeg = 0
+	g.Units[1].Placed = true
+	g.Units[1].X = 100
+	g.Units[1].Y = 100
+	g.Units[1].FacingDeg = 180
+	beforeTargetMiniHealth := unitByID(g, "u2").Minis[0].HealthRemaining
+	if err := st.SaveGame(g); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(st, engine).Routes()
+	res := request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/actions", `{"playerId":1,"unitId":"u1","type":"shoot","targetUnitId":"u2"}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("shoot status %d: %s", res.Code, res.Body.String())
+	}
+	var shot game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &shot); err != nil {
+		t.Fatal(err)
+	}
+	if shot.Action == nil || shot.Action.Type != game.ActionShoot {
+		t.Fatalf("action = %#v, want shoot record", shot.Action)
+	}
+	actionResult := shot.Action.Result.(map[string]any)
+	shootingResult, ok := actionResult["shooting"].(map[string]any)
+	if !ok {
+		t.Fatalf("shooting result missing from action JSON: %#v", actionResult)
+	}
+	if shootingResult["targetUnitId"] != "u2" || shootingResult["weapon"] != "Bow" || shootingResult["diceCount"].(float64) != 4 {
+		t.Fatalf("shooting result = %#v, want u2 bow with shielding-reduced dice", shootingResult)
+	}
+	if shot.Game.CurrentActivation == nil || shot.Game.CurrentActivation.ActionsRemaining != 1 || shot.Game.CurrentActivation.ShotsTaken != 1 {
+		t.Fatalf("activation after shot = %#v, want one action remaining and one shot taken", shot.Game.CurrentActivation)
+	}
+	if containsLegalAction(shot.LegalActions, game.ActionShoot) {
+		t.Fatalf("legal actions after shot = %v, want no repeat shoot action", shot.LegalActions)
+	}
+	if unitByID(shot.Game, "u2").Minis[0].HealthRemaining >= beforeTargetMiniHealth {
+		t.Fatalf("target mini health = %d, want less than %d", unitByID(shot.Game, "u2").Minis[0].HealthRemaining, beforeTargetMiniHealth)
+	}
+	if !strings.Contains(strings.Join(shot.Messages, "\n"), "Shot u2 with Bow") {
+		t.Fatalf("shoot response missing feedback message: %v", shot.Messages)
+	}
+
+	assertJSONError(t, request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/actions", `{"playerId":1,"unitId":"u1","type":"shoot","targetUnitId":"u2"}`), http.StatusBadRequest, "unit has already shot this activation")
+	afterRejectedRepeat := getGame(t, srv, g.ID)
+	if len(afterRejectedRepeat.ActionHistory) != 1 || unitByID(afterRejectedRepeat, "u2").Minis[0].HealthRemaining != unitByID(shot.Game, "u2").Minis[0].HealthRemaining {
+		t.Fatalf("rejected repeat shot mutated game: actions=%d target=%#v", len(afterRejectedRepeat.ActionHistory), unitByID(afterRejectedRepeat, "u2"))
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/rewind", `{"actionIndex":`+itoa(shot.Action.Index)+`}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("rewind shot status %d: %s", res.Code, res.Body.String())
+	}
+	var rewound game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &rewound); err != nil {
+		t.Fatal(err)
+	}
+	if len(rewound.Game.ActionHistory) != 0 || rewound.Game.CurrentActivation == nil || rewound.Game.CurrentActivation.ShotsTaken != 0 || unitByID(rewound.Game, "u2").Minis[0].HealthRemaining != beforeTargetMiniHealth {
+		t.Fatalf("rewind shot got actions=%d activation=%#v target=%#v, want active pre-shot state", len(rewound.Game.ActionHistory), rewound.Game.CurrentActivation, unitByID(rewound.Game, "u2"))
+	}
+}
+
 func TestCombatHTTPFlowPersistsPendingChoiceAndRewinds(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
 	if err != nil {

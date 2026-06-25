@@ -355,6 +355,10 @@ func (s *Server) rewind(w http.ResponseWriter, r *http.Request) {
 	}
 	state, err := s.store.Snapshot(r.PathValue("id"), req.ActionIndex)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErrorMessage(w, http.StatusBadRequest, "game snapshot not found")
+			return
+		}
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}

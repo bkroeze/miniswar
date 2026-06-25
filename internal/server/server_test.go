@@ -637,6 +637,96 @@ func TestHTTPCombatPushbackChoiceMovesUnitAndRewinds(t *testing.T) {
 	}
 }
 
+func TestHTTPActivateResolvesExistingEngagementAndRewinds(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	engine := game.NewEngine(1)
+	g, err := engine.NewGame(game.Setup{
+		Player1Units: []game.UnitSetup{{BaseWidthMM: 25, BaseDepthMM: 25, Count: 1, Stats: game.UnitStats{A: 1, F: 1, D: 20, CD: 1, H: 20}}},
+		Player2Units: []game.UnitSetup{{BaseWidthMM: 25, BaseDepthMM: 25, Count: 1, Stats: game.UnitStats{A: 20, F: 1, D: 20, CD: 1, H: 20}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Phase = "awaiting_activation"
+	g.ActivePlayer = 2
+	g.FirstPlayer = 1
+	g.RandomSeed = 37
+	g.RandomRollIndex = 0
+	g.Units[0].Placed = true
+	g.Units[0].X = 100
+	g.Units[0].Y = 75
+	g.Units[0].FacingDeg = 0
+	g.Units[1].Placed = true
+	g.Units[1].X = 100
+	g.Units[1].Y = 50
+	g.Units[1].FacingDeg = 0
+	g.Engagements = []game.CombatEngagement{{
+		ID:                 "engaged-activation",
+		AttackerUnitID:     "u1",
+		DefenderUnitID:     "u2",
+		DefenderFace:       game.CombatFaceRear,
+		AxisDX:             0,
+		AxisDY:             -1,
+		Round:              1,
+		CreatedActionIndex: 0,
+		Active:             true,
+	}}
+	if err := st.SaveGame(g); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(st, engine).Routes()
+	res := request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/activate", `{"playerId":2,"unitId":"u2"}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("activate status %d: %s", res.Code, res.Body.String())
+	}
+	var activated game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &activated); err != nil {
+		t.Fatal(err)
+	}
+	if activated.Action == nil || activated.Action.Type != game.ActionActivate {
+		t.Fatalf("action = %#v, want activate record", activated.Action)
+	}
+	actionResult := activated.Action.Result.(map[string]any)
+	rounds, ok := actionResult["combatRounds"].([]any)
+	if !ok || len(rounds) != 1 {
+		t.Fatalf("activation result missing combatRounds: %#v", actionResult)
+	}
+	if activated.Game.PendingCombatChoice == nil || activated.Game.Phase != "pending_combat_choice" {
+		t.Fatalf("activation combat should create pending choice: phase=%q pending=%#v", activated.Game.Phase, activated.Game.PendingCombatChoice)
+	}
+	if len(activated.LegalActions) != 1 || activated.LegalActions[0] != game.ActionCombatPushback {
+		t.Fatalf("legal actions after activation combat = %v, want only combat pushback", activated.LegalActions)
+	}
+	if !strings.Contains(strings.Join(activated.Messages, "\n"), "won combat; choose pushback, withdraw, or decline.") {
+		t.Fatalf("activation combat response missing choice message: %v", activated.Messages)
+	}
+	reloaded := getGame(t, srv, g.ID)
+	if reloaded.PendingCombatChoice == nil || reloaded.Phase != "pending_combat_choice" {
+		t.Fatalf("reloaded game did not persist pending choice: phase=%q pending=%#v", reloaded.Phase, reloaded.PendingCombatChoice)
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/rewind", `{"actionIndex":`+itoa(activated.Action.Index)+`}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("rewind activation status %d: %s", res.Code, res.Body.String())
+	}
+	var rewound game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &rewound); err != nil {
+		t.Fatal(err)
+	}
+	if rewound.Game.Phase != "awaiting_activation" || rewound.Game.PendingCombatChoice != nil || len(rewound.Game.Engagements) != 1 || !rewound.Game.Engagements[0].Active {
+		t.Fatalf("rewind should restore pre-activation engagement: phase=%q pending=%#v engagements=%#v", rewound.Game.Phase, rewound.Game.PendingCombatChoice, rewound.Game.Engagements)
+	}
+	if rewound.Game.CurrentActivation != nil || len(rewound.Game.ActionHistory) != 0 || rewound.Game.RandomRollIndex != 0 {
+		t.Fatalf("rewind should restore pre-activation turn state: activation=%#v actions=%d random=%d", rewound.Game.CurrentActivation, len(rewound.Game.ActionHistory), rewound.Game.RandomRollIndex)
+	}
+}
+
 func TestHTTPCombatCanCompleteGameAndRewind(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
 	if err != nil {

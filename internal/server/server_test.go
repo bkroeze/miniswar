@@ -64,6 +64,55 @@ func TestHealthcheckIncludesUptime(t *testing.T) {
 	}
 }
 
+func TestCreateGameRejectsInvalidSetupWithoutPersisting(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	srv := New(st, game.NewEngine(1)).Routes()
+	cases := []struct {
+		name string
+		body string
+		err  string
+	}{
+		{
+			name: "zero mini unit",
+			body: `{"battlemapId":"old_road","player1Units":[{"baseWidthMm":25,"baseDepthMm":25,"count":0}],"player2Units":[{"baseWidthMm":25,"baseDepthMm":25,"count":5}]}`,
+			err:  "player1 unit 1: count must be between 1 and 20",
+		},
+		{
+			name: "large base with multiple minis",
+			body: `{"battlemapId":"old_road","player1Units":[{"baseWidthMm":50,"baseDepthMm":100,"count":2}],"player2Units":[{"baseWidthMm":25,"baseDepthMm":25,"count":5}]}`,
+			err:  "player1 unit 1: count must be between 1 and 1",
+		},
+		{
+			name: "unknown battlemap",
+			body: `{"battlemapId":"missing-map","player1Units":[{"baseWidthMm":25,"baseDepthMm":25,"count":5}],"player2Units":[{"baseWidthMm":25,"baseDepthMm":25,"count":5}]}`,
+			err:  `battlemap "missing-map" not found`,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			assertJSONError(t, request(t, srv, http.MethodPost, "/api/games", tt.body), http.StatusBadRequest, tt.err)
+
+			res := request(t, srv, http.MethodGet, "/api/games", "")
+			if res.Code != http.StatusOK {
+				t.Fatalf("list status %d: %s", res.Code, res.Body.String())
+			}
+			var listed game.APIResponse
+			if err := json.Unmarshal(res.Body.Bytes(), &listed); err != nil {
+				t.Fatal(err)
+			}
+			if len(listed.Games) != 0 {
+				t.Fatalf("rejected setup persisted %d game(s), want 0", len(listed.Games))
+			}
+		})
+	}
+}
+
 func TestCreateActivateActionAndRewind(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
 	if err != nil {

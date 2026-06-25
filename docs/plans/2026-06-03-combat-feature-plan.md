@@ -255,11 +255,11 @@ Existing games without these fields should unmarshal as healthy, not engaged, no
 - **Goal:** Expose the full combat loop through JSON and prove it survives persistence and rewind.
 - **Files:** `internal/server/server.go`, `internal/server/server_test.go`, `internal/store/store.go`.
 - **Patterns:** Keep mutation routes wrapping engine calls with pre-action snapshots and returning `game.APIResponse`.
-- **Design Notes:** Prefer routing pushback through the existing `POST /api/games/{id}/actions` path if the payload can stay coherent; add a dedicated endpoint only if the action payload becomes ambiguous. In either case, response shape should include `ok`, `game`, `action`, `legalActions`, `messages`, and `errors`.
+- **Design Notes:** Prefer routing pushback through the existing `POST /api/games/{id}/actions` path if the payload can stay coherent; add a dedicated endpoint only if the action payload becomes ambiguous. `pushback_150` must require and validate `distanceMm` greater than `0` and no more than `150`, while `withdraw_25` and `decline` keep their fixed behavior. In either case, response shape should include `ok`, `game`, `action`, `legalActions`, `messages`, and `errors`.
 - **Test Scenarios:**
   - `internal/server/server_test.go`: full HTTP flow creates game, places units, activates, moves into combat, receives combat result, resolves pushback, reloads, and sees persisted state.
   - `internal/server/server_test.go`: rewind before combat restores unit pose, mini health, statuses, engagements, pending choices, and random progress.
-  - `internal/server/server_test.go`: invalid pushback choice returns `400` with a useful error.
+  - `internal/server/server_test.go`: invalid pushback choice or pushback distance returns `400` with a useful error.
   - `internal/server/server_test.go`: combat result JSON contains rolls, modifiers, hits, casualties, morale, and pending choice data.
 - **Verification:** `go test ./internal/server`.
 

@@ -202,12 +202,13 @@ flowchart TB
 - **Requirements:** R2, R3, R7, R14
 - **Dependencies:** U1, U2, U3
 - **Files:** `web/static/app.js`, `web/static/app.css`, `web/templates/index.html`, `internal/server/server_test.go`
-- **Approach:** When `game.pendingCombatChoice` is present, suppress normal activation and action controls. Render the available combat choices contextually near the winning unit when it is visible: a clickable `150mm` forward line for `pushback_150`, a clickable `25mm` backward line for `withdraw_25`, and a compact decline control. Keep a left-bar fallback and keep `resolveCombatChoice(choice)` posting the existing `combat_pushback` payload.
+- **Approach:** When `game.pendingCombatChoice` is present, suppress normal activation and action controls. Render the available combat choices contextually near the winning unit when it is visible: a clickable `150mm` forward line for `pushback_150` where the click position sets `distanceMm`, a clickable `25mm` backward line for `withdraw_25`, and a compact decline control. Keep a left-bar fallback and keep `resolveCombatChoice(choice, distanceMm)` posting the `combat_pushback` payload with distance only when the choice needs it.
 - **Patterns to follow:** Current `pendingCombatChoice()`, `combatChoiceLabel()`, `resolveCombatChoice()`, engagement status classes in `renderArena()`, and combat HTTP tests in `internal/server/server_test.go`.
 - **Test scenarios:**
   - Moving into combat creates a pending choice and hides normal activation/action overlays.
   - Pending choice controls show the same legal choices returned by the existing game state, including the 150mm pushback line and 25mm withdraw line when those choices are legal.
-  - Choosing pushback, withdraw, or decline posts the existing `combat_pushback` action payload.
+  - Clicking the 150mm pushback line submits the projected clicked distance, capped at 150mm, instead of always requesting the full distance.
+  - Choosing pushback, withdraw, or decline posts the `combat_pushback` action payload, including `distanceMm` for `pushback_150`.
   - Invalid or failed combat-choice responses remain visible in Feedback.
   - Rewinding before the combat action clears pending choice controls and restores normal activation flow.
 - **Verification:** Existing combat HTTP tests continue to pass, and manual browser flow can enter combat, resolve the pending choice, and rewind.

@@ -400,19 +400,22 @@ function createMiniswarApp() {
       this.messages = [...(response.messages || []), ...(response.errors || [])];
     },
 
-    async resolveCombatChoice(combatChoice) {
+    async resolveCombatChoice(combatChoice, distanceMm = 0) {
       if (this.rejectReadOnlyAction()) return;
       const choice = this.pendingCombatChoice();
       if (!choice) return;
       this.clearActiveCommand();
+      const requestedDistanceMm = distanceMm > 0 ? distanceMm : this.defaultCombatChoiceDistance(combatChoice);
+      const payload = {
+        playerId: choice.winningPlayerId,
+        unitId: choice.winningUnitId,
+        type: "combat_pushback",
+        combatChoice,
+      };
+      if (requestedDistanceMm > 0) payload.distanceMm = requestedDistanceMm;
       const response = await this.api(`/api/games/${this.game.id}/actions`, {
         method: "POST",
-        body: JSON.stringify({
-          playerId: choice.winningPlayerId,
-          unitId: choice.winningUnitId,
-          type: "combat_pushback",
-          combatChoice,
-        }),
+        body: JSON.stringify(payload),
       });
       if (response.ok) {
         await this.setGameFromResponse(response, { resetPivotAxis: true });
@@ -580,10 +583,14 @@ function createMiniswarApp() {
 
     combatChoiceLabel(choice) {
       return {
-        pushback_150: "Push 150mm",
+        pushback_150: "Push up to 150mm",
         withdraw_25: "Withdraw 25mm",
         decline: "Decline",
       }[choice] || choice;
+    },
+
+    defaultCombatChoiceDistance(choice) {
+      return choice === "pushback_150" ? 150 : 0;
     },
 
     canActivate() {
@@ -1257,19 +1264,19 @@ function createMiniswarApp() {
       const backwardChoice = (choice.choices || []).includes("withdraw_25") ? "withdraw_25" : "";
       if (forwardChoice) {
         const end = { x: start.x + vector.x * 150, y: start.y + vector.y * 150 };
-        this.appendCombatChoiceSegment(root, unit, start, end, forwardChoice, "Push losing unit 150mm", true);
+        this.appendCombatChoiceSegment(root, unit, start, end, forwardChoice, "Push losing unit up to 150mm", true, 150);
       }
       if (backwardChoice) {
         const end = { x: start.x - vector.x * 25, y: start.y - vector.y * 25 };
-        this.appendCombatChoiceSegment(root, unit, start, end, backwardChoice, "Withdraw winning unit 25mm", false);
+        this.appendCombatChoiceSegment(root, unit, start, end, backwardChoice, "Withdraw winning unit 25mm", false, 0);
       }
     },
 
-    appendCombatChoiceSegment(root, unit, start, end, combatChoice, title, arrowHead) {
+    appendCombatChoiceSegment(root, unit, start, end, combatChoice, title, arrowHead, maxDistance) {
       const group = this.svgElement("g", { class: `combat-choice-line p${unit.playerId}`, "data-arena-control": combatChoice });
       group.addEventListener("click", (event) => {
         event.stopPropagation();
-        void this.resolveCombatChoice(combatChoice);
+        void this.resolveCombatChoice(combatChoice, maxDistance > 0 ? this.combatChoiceDistanceAtPoint(this.arenaPoint(event), start, end, maxDistance) : 0);
       });
       group.appendChild(this.svgElement("title")).textContent = title;
       group.appendChild(this.svgElement("line", { class: "move-arrow-hit", x1: start.x, y1: start.y, x2: end.x, y2: end.y }));
@@ -1282,6 +1289,15 @@ function createMiniswarApp() {
         group.appendChild(this.svgElement("path", { d: `M ${end.x} ${end.y} L ${left.x} ${left.y} L ${right.x} ${right.y} Z` }));
       }
       root.appendChild(group);
+    },
+
+    combatChoiceDistanceAtPoint(point, start, end, maxDistance) {
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const length = Math.hypot(dx, dy);
+      if (length <= 0) return 1;
+      const projection = ((point.x - start.x) * dx + (point.y - start.y) * dy) / length;
+      return Math.max(1, Math.min(maxDistance, Math.round(projection)));
     },
 
     combatChoiceVector(choice, unit) {

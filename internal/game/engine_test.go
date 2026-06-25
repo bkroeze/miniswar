@@ -576,7 +576,7 @@ func TestCombatChoicePushbackMovesLoserAndClosesEngagement(t *testing.T) {
 	g.Units[1].Y = 250
 	loserBeforeY := g.Units[1].Y
 
-	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150})
+	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150, DistanceMM: 90})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -587,12 +587,26 @@ func TestCombatChoicePushbackMovesLoserAndClosesEngagement(t *testing.T) {
 	if g.Engagements[0].Active {
 		t.Fatalf("resolved choice should close engagement: %+v", g.Engagements[0])
 	}
-	if got := mathRound(g.Units[1].Y - loserBeforeY); got != -150 {
-		t.Fatalf("loser moved %.0fmm, want -150mm", got)
+	if got := mathRound(g.Units[1].Y - loserBeforeY); got != -90 {
+		t.Fatalf("loser moved %.0fmm, want -90mm", got)
 	}
 	choiceResult := rec.Result.(map[string]any)["combatChoice"].(CombatChoiceResult)
-	if choiceResult.MovingUnitID != "u2" || choiceResult.RequestedDistanceMM != 150 || choiceResult.MovedDistanceMM != 150 || choiceResult.StoppedBy != "completed" {
+	if choiceResult.MovingUnitID != "u2" || choiceResult.RequestedDistanceMM != 90 || choiceResult.MovedDistanceMM != 90 || choiceResult.StoppedBy != "completed" {
 		t.Fatalf("structured choice result missing movement detail: %+v", choiceResult)
+	}
+}
+
+func TestCombatChoicePushbackRequiresDistanceNoMoreThan150(t *testing.T) {
+	engine := NewEngine(37)
+	for _, distance := range []float64{0, -1, 151} {
+		g := combatChoiceGame()
+		_, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150, DistanceMM: distance})
+		if err == nil {
+			t.Fatalf("distance %.0f should be rejected", distance)
+		}
+		if g.PendingCombatChoice == nil || !g.Engagements[0].Active {
+			t.Fatalf("invalid distance should preserve pending combat state: pending=%+v engagement=%+v", g.PendingCombatChoice, g.Engagements[0])
+		}
 	}
 }
 
@@ -602,7 +616,7 @@ func TestCombatChoiceMovementStopsAtBattlemapEdge(t *testing.T) {
 	g.Battlemap = Battlemap{ID: "small", Name: "Small", WidthMM: 760, HeightMM: 520}
 	g.Units[1].Y = 10
 
-	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150})
+	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150, DistanceMM: 150})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -643,7 +657,7 @@ func TestDefenderWonPushbackMovesLosingAttackerAwayFromDefender(t *testing.T) {
 	g.PendingCombatChoice.LosingUnitID = "u1"
 	attackerBeforeY := g.Units[0].Y
 
-	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 2, UnitID: "u2", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150}); err != nil {
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 2, UnitID: "u2", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150, DistanceMM: 150}); err != nil {
 		t.Fatal(err)
 	}
 	if got := mathRound(g.Units[0].Y - attackerBeforeY); got != -150 {
@@ -659,7 +673,7 @@ func TestCombatChoicePushbackChainsContactedUnit(t *testing.T) {
 	chain := formationUnit("u3", 2, 100, 100, 0, 1)
 	g.Units = append(g.Units, chain)
 
-	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150}); err != nil {
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150, DistanceMM: 150}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -691,7 +705,7 @@ func TestCombatChoicePushbackRechecksPreviouslyProcessedChainedUnit(t *testing.T
 	downstream := formationUnit("u5", 2, 198, 100, 90, 1)
 	g.Units = append(g.Units, alreadyProcessed, secondContact, downstream)
 
-	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150}); err != nil {
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150, DistanceMM: 150}); err != nil {
 		t.Fatal(err)
 	}
 

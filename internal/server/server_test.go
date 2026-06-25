@@ -582,7 +582,7 @@ func TestHTTPCombatPushbackChoiceMovesUnitAndRewinds(t *testing.T) {
 	}
 	choiceUnitBefore := unitByID(moved.Game, choice.LosingUnitID)
 
-	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/actions", `{"playerId":`+itoa(choice.WinningPlayerID)+`,"unitId":"`+choice.WinningUnitID+`","type":"combat_pushback","combatChoice":"pushback_150"}`)
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/actions", `{"playerId":`+itoa(choice.WinningPlayerID)+`,"unitId":"`+choice.WinningUnitID+`","type":"combat_pushback","combatChoice":"pushback_150","distanceMm":80}`)
 	if res.Code != http.StatusOK {
 		t.Fatalf("pushback status %d: %s", res.Code, res.Body.String())
 	}
@@ -605,7 +605,7 @@ func TestHTTPCombatPushbackChoiceMovesUnitAndRewinds(t *testing.T) {
 	if !ok {
 		t.Fatalf("combat choice result missing from action JSON: %#v", actionResult)
 	}
-	if choiceResult["choice"] != "pushback_150" || choiceResult["movingUnitId"] != choice.LosingUnitID || choiceResult["requestedDistanceMm"].(float64) != 150 || choiceResult["movedDistanceMm"].(float64) <= 0 {
+	if choiceResult["choice"] != "pushback_150" || choiceResult["movingUnitId"] != choice.LosingUnitID || choiceResult["requestedDistanceMm"].(float64) != 80 || choiceResult["movedDistanceMm"].(float64) <= 0 || choiceResult["movedDistanceMm"].(float64) > 80 {
 		t.Fatalf("combat choice result = %#v, want pushback of %s", choiceResult, choice.LosingUnitID)
 	}
 	if !strings.Contains(strings.Join(pushed.Messages, "\n"), "Pushed "+choice.LosingUnitID+" ") {

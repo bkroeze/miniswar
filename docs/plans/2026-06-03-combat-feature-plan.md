@@ -53,7 +53,7 @@ Before this work, the engine treated enemy units as blocking movement obstacles 
 
 **Pushback and Choice State**
 
-- R19. After a combat round where both units remain, the side that delivered more hits must be offered the options to push the opposing unit by `150mm` in the winner's facing direction, withdraw itself by `25mm` backward, or decline.
+- R19. After a combat round where both units remain, the side that delivered more hits must be offered the options to push the opposing unit by up to `150mm` in the winner's facing direction, withdraw itself by `25mm` backward, or decline.
 - R20. Pushback and withdraw movement must stop before impassable terrain or the arena edge, ignore rough-ground movement penalties, and chain contacted units far enough to keep at least `25mm` clearance.
 - R21. Because pushback is a player choice, the engine must expose it as an explicit pending choice and an explicit API action before normal play continues.
 - R21a. If both sides delivered the same number of hits, both combat units must automatically push back `25mm` directly away from each other and no pending choice is created.
@@ -239,10 +239,10 @@ Existing games without these fields should unmarshal as healthy, not engaged, no
 - **Goal:** Implement the player-choice movement after combat and the passable-obstacle hook needed by combat modifiers.
 - **Files:** `internal/game/types.go`, `internal/game/engine.go`, `internal/game/engine_test.go`, `internal/server/server.go`, `web/static/app.js`.
 - **Patterns:** Reuse stepwise movement stopping logic for terrain and arena edge. Add terrain type constants near existing terrain constants.
-- **Design Notes:** Add `ActionCombatPushback` or an equivalent action request type with choices for `pushback_150`, `withdraw_25`, and `decline`. Pushback uses the winner's facing direction, withdraw moves backward on that axis, both stop at impassable terrain or the arena edge, and pushback chains contacted units to maintain `25mm` clearance. Add passable-obstacle terrain type now, even if no default battlemap uses it yet, so the fortification modifier has a real hook.
+- **Design Notes:** Add `ActionCombatPushback` or an equivalent action request type with choices for `pushback_150`, `withdraw_25`, and `decline`. Pushback uses the winner's facing direction and the requested clicked distance up to `150mm`, withdraw moves backward on that axis, both stop at impassable terrain or the arena edge, and pushback chains contacted units to maintain `25mm` clearance. Add passable-obstacle terrain type now, even if no default battlemap uses it yet, so the fortification modifier has a real hook.
 - **Test Scenarios:**
   - `internal/game/engine_test.go`: combat winner receives exactly the legal pushback/withdraw/decline choices.
-  - `internal/game/engine_test.go`: pushback by 150mm moves the losing unit in the winner's facing direction and stops at obstacles.
+  - `internal/game/engine_test.go`: pushback by a requested distance up to 150mm moves the losing unit in the winner's facing direction and stops at obstacles.
   - `internal/game/engine_test.go`: withdraw by 25mm moves the winning unit backward on the same axis.
   - `internal/game/engine_test.go`: tied combat automatically pushes both combat units 25mm directly away from each other.
   - `internal/game/engine_test.go`: pushback chains contacted units far enough to maintain 25mm clearance.
@@ -255,11 +255,11 @@ Existing games without these fields should unmarshal as healthy, not engaged, no
 - **Goal:** Expose the full combat loop through JSON and prove it survives persistence and rewind.
 - **Files:** `internal/server/server.go`, `internal/server/server_test.go`, `internal/store/store.go`.
 - **Patterns:** Keep mutation routes wrapping engine calls with pre-action snapshots and returning `game.APIResponse`.
-- **Design Notes:** Prefer routing pushback through the existing `POST /api/games/{id}/actions` path if the payload can stay coherent; add a dedicated endpoint only if the action payload becomes ambiguous. In either case, response shape should include `ok`, `game`, `action`, `legalActions`, `messages`, and `errors`.
+- **Design Notes:** Prefer routing pushback through the existing `POST /api/games/{id}/actions` path if the payload can stay coherent; add a dedicated endpoint only if the action payload becomes ambiguous. `pushback_150` must require and validate `distanceMm` greater than `0` and no more than `150`, while `withdraw_25` and `decline` keep their fixed behavior. In either case, response shape should include `ok`, `game`, `action`, `legalActions`, `messages`, and `errors`.
 - **Test Scenarios:**
   - `internal/server/server_test.go`: full HTTP flow creates game, places units, activates, moves into combat, receives combat result, resolves pushback, reloads, and sees persisted state.
   - `internal/server/server_test.go`: rewind before combat restores unit pose, mini health, statuses, engagements, pending choices, and random progress.
-  - `internal/server/server_test.go`: invalid pushback choice returns `400` with a useful error.
+  - `internal/server/server_test.go`: invalid pushback choice or pushback distance returns `400` with a useful error.
   - `internal/server/server_test.go`: combat result JSON contains rolls, modifiers, hits, casualties, morale, and pending choice data.
 - **Verification:** `go test ./internal/server`.
 
@@ -303,7 +303,7 @@ Existing games without these fields should unmarshal as healthy, not engaged, no
   - **Covers:** R19, R20, R21
   - **Given:** Combat produces a winner and both units remain on the battlefield.
   - **When:** The action response is returned.
-  - **Then:** The game exposes only the legal pending pushback choices until the winner submits `pushback_150`, `withdraw_25`, or `decline`.
+  - **Then:** The game exposes only the legal pending pushback choices until the winner submits `pushback_150` with a requested distance, `withdraw_25`, or `decline`.
 
 - AE4a. **Tied Combat Pushback**
   - **Covers:** R21a

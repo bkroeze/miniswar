@@ -181,6 +181,97 @@ func TestCreateActivateActionAndRewind(t *testing.T) {
 	}
 }
 
+func TestHTTPPivotAndAboutFaceCanRewind(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	engine := game.NewEngine(1)
+	g, err := engine.NewGame(game.Setup{
+		Player1: game.UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 7},
+		Player2: game.UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 1},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Phase = "activated"
+	g.ActivePlayer = 1
+	g.FirstPlayer = 1
+	g.Units[0].Placed = true
+	g.Units[0].X = 150
+	g.Units[0].Y = 150
+	g.Units[0].FacingDeg = 0
+	g.Units[1].Placed = true
+	g.Units[1].X = 600
+	g.Units[1].Y = 400
+	g.Units[1].FacingDeg = 180
+	g.CurrentActivation = &game.Activation{UnitID: g.Units[0].ID, PlayerID: 1, Success: true, ActionsRemaining: 2}
+	anchorKey := g.Units[0].Minis[0].Key
+	if err := st.SaveGame(g); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(st, engine).Routes()
+	res := request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/actions", `{"playerId":1,"unitId":"`+g.Units[0].ID+`","type":"pivot","facingDeg":90,"anchorKey":"`+anchorKey+`"}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("pivot status %d: %s", res.Code, res.Body.String())
+	}
+	var pivoted game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &pivoted); err != nil {
+		t.Fatal(err)
+	}
+	if unitByID(pivoted.Game, g.Units[0].ID).FacingDeg != 90 {
+		t.Fatalf("pivot facing = %d, want 90", unitByID(pivoted.Game, g.Units[0].ID).FacingDeg)
+	}
+	if pivoted.Game.CurrentActivation == nil || pivoted.Game.CurrentActivation.ActionsRemaining != 1 {
+		t.Fatalf("pivot activation = %#v, want one action remaining", pivoted.Game.CurrentActivation)
+	}
+	if !strings.Contains(strings.Join(pivoted.Messages, "\n"), "Pivoted to 90 degrees around "+anchorKey+".") {
+		t.Fatalf("pivot messages = %v", pivoted.Messages)
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/actions", `{"playerId":1,"unitId":"`+g.Units[0].ID+`","type":"about_face"}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("about face status %d: %s", res.Code, res.Body.String())
+	}
+	var faced game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &faced); err != nil {
+		t.Fatal(err)
+	}
+	if unitByID(faced.Game, g.Units[0].ID).FacingDeg != 270 {
+		t.Fatalf("about face facing = %d, want 270", unitByID(faced.Game, g.Units[0].ID).FacingDeg)
+	}
+	if faced.Game.CurrentActivation != nil || faced.Game.Phase != "awaiting_activation" {
+		t.Fatalf("about face should end activation: phase=%q activation=%#v", faced.Game.Phase, faced.Game.CurrentActivation)
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/rewind", `{"actionIndex":`+itoa(faced.Action.Index)+`}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("rewind about face status %d: %s", res.Code, res.Body.String())
+	}
+	var rewoundAboutFace game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &rewoundAboutFace); err != nil {
+		t.Fatal(err)
+	}
+	if unitByID(rewoundAboutFace.Game, g.Units[0].ID).FacingDeg != 90 || rewoundAboutFace.Game.CurrentActivation == nil || rewoundAboutFace.Game.CurrentActivation.ActionsRemaining != 1 {
+		t.Fatalf("rewind about face got facing=%d activation=%#v, want pivoted active state", unitByID(rewoundAboutFace.Game, g.Units[0].ID).FacingDeg, rewoundAboutFace.Game.CurrentActivation)
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/rewind", `{"actionIndex":`+itoa(pivoted.Action.Index)+`}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("rewind pivot status %d: %s", res.Code, res.Body.String())
+	}
+	var rewoundPivot game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &rewoundPivot); err != nil {
+		t.Fatal(err)
+	}
+	if unitByID(rewoundPivot.Game, g.Units[0].ID).FacingDeg != 0 || rewoundPivot.Game.CurrentActivation == nil || rewoundPivot.Game.CurrentActivation.ActionsRemaining != 2 {
+		t.Fatalf("rewind pivot got facing=%d activation=%#v, want original active state", unitByID(rewoundPivot.Game, g.Units[0].ID).FacingDeg, rewoundPivot.Game.CurrentActivation)
+	}
+}
+
 func TestActionsEndpointAndInvalidRewind(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
 	if err != nil {

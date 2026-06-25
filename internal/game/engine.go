@@ -1914,6 +1914,7 @@ func markMoraleTestsInResult(tested map[string]bool, result any) {
 	}
 	markMoraleTestsInCombat(tested, value["combatRound"])
 	markMoraleTestsInCombat(tested, value["movement"])
+	markMoraleTestsInCombat(tested, value["shooting"])
 	if rounds, ok := value["combatRounds"].([]CombatRoundResult); ok {
 		for _, round := range rounds {
 			markMoraleTestsInCombat(tested, round)
@@ -1933,7 +1934,15 @@ func markMoraleTestsInCombat(tested map[string]bool, combat any) {
 		for _, morale := range value.MoraleTests {
 			tested[morale.UnitID] = true
 		}
+	case ShootResult:
+		for _, morale := range value.MoraleTests {
+			tested[morale.UnitID] = true
+		}
 	case *CombatRoundResult:
+		if value != nil {
+			markMoraleTestsInCombat(tested, *value)
+		}
+	case *ShootResult:
 		if value != nil {
 			markMoraleTestsInCombat(tested, *value)
 		}

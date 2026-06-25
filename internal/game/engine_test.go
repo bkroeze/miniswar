@@ -895,6 +895,44 @@ func TestMoraleCascadeSkipsUnitsAlreadyTestedThisRound(t *testing.T) {
 	}
 }
 
+func TestMoraleCascadeSkipsUnitsWithShootingMoraleThisRound(t *testing.T) {
+	engine := NewEngine(29)
+	g := &Game{
+		Round:      1,
+		RandomSeed: 29,
+		Battlemap:  Battlemaps()[0],
+		ActionHistory: []ActionRecord{
+			{
+				Round: 1,
+				Result: map[string]any{
+					"shooting": ShootResult{
+						MoraleTests: []MoraleTestResult{{UnitID: "u2", Passed: true}},
+					},
+				},
+			},
+		},
+	}
+	broken := oneMiniUnit("u1", 1, 100, 100, 0)
+	broken.Broken = true
+	broken.Placed = false
+	alreadyTested := oneMiniUnit("u2", 1, 125, 100, 0)
+	alreadyTested.Stats.A = 11
+	alreadyTested.Disordered = true
+	notYetTested := oneMiniUnit("u3", 1, 150, 100, 0)
+	notYetTested.Stats.A = 11
+	notYetTested.Disordered = true
+	g.Units = []Unit{broken, alreadyTested, notYetTested}
+
+	cascade := engine.resolveBrokenCascade(g, "u1", moraleTestedThisRound(g))
+
+	if len(cascade) != 1 || cascade[0].UnitID != "u3" {
+		t.Fatalf("cascade got %+v, want only not-yet-tested u3", cascade)
+	}
+	if g.Units[1].Broken || !g.Units[2].Broken {
+		t.Fatalf("wrong cascade state: already=%+v notYet=%+v", g.Units[1], g.Units[2])
+	}
+}
+
 func TestActivationCombatMoraleTestedOnceAcrossEngagements(t *testing.T) {
 	engine := NewEngine(29)
 	attacker := oneMiniUnit("u1", 1, 100, 100, 0)

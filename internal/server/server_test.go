@@ -551,6 +551,92 @@ func TestCombatHTTPFlowPersistsPendingChoiceAndRewinds(t *testing.T) {
 	}
 }
 
+func TestHTTPCombatPushbackChoiceMovesUnitAndRewinds(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	srv, g := createCombatGameWithFirstPlayer(t, st, 1)
+	placeCombatUnits(t, srv, g)
+	g = getGame(t, srv, g.ID)
+	unit := firstUnitForPlayer(g, 1)
+
+	res := request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/activate", `{"playerId":1,"unitId":"`+unit.ID+`"}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("activate status %d: %s", res.Code, res.Body.String())
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/actions", `{"playerId":1,"unitId":"`+unit.ID+`","type":"move","direction":"forward","distanceMm":40}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("combat move status %d: %s", res.Code, res.Body.String())
+	}
+	var moved game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &moved); err != nil {
+		t.Fatal(err)
+	}
+	choice := moved.Game.PendingCombatChoice
+	if choice == nil || len(choice.Choices) == 0 {
+		t.Fatalf("move should create pending combat choices: %#v", moved.Game.PendingCombatChoice)
+	}
+	choiceUnitBefore := unitByID(moved.Game, choice.LosingUnitID)
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/actions", `{"playerId":`+itoa(choice.WinningPlayerID)+`,"unitId":"`+choice.WinningUnitID+`","type":"combat_pushback","combatChoice":"pushback_25"}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("pushback status %d: %s", res.Code, res.Body.String())
+	}
+	var pushed game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &pushed); err != nil {
+		t.Fatal(err)
+	}
+	if pushed.Game.PendingCombatChoice != nil {
+		t.Fatalf("pushback should clear pending choice: %#v", pushed.Game.PendingCombatChoice)
+	}
+	if len(pushed.Game.Engagements) != 1 || pushed.Game.Engagements[0].Active {
+		t.Fatalf("pushback should close engagement: %#v", pushed.Game.Engagements)
+	}
+	choiceUnitAfter := unitByID(pushed.Game, choice.LosingUnitID)
+	if choiceUnitAfter.X == choiceUnitBefore.X && choiceUnitAfter.Y == choiceUnitBefore.Y {
+		t.Fatalf("pushback did not move losing unit %s from (%v,%v)", choice.LosingUnitID, choiceUnitBefore.X, choiceUnitBefore.Y)
+	}
+	actionResult := pushed.Action.Result.(map[string]any)
+	choiceResult, ok := actionResult["combatChoice"].(map[string]any)
+	if !ok {
+		t.Fatalf("combat choice result missing from action JSON: %#v", actionResult)
+	}
+	if choiceResult["choice"] != "pushback_25" || choiceResult["movingUnitId"] != choice.LosingUnitID || choiceResult["movedDistanceMm"].(float64) != 25 || choiceResult["stoppedBy"] != "completed" {
+		t.Fatalf("combat choice result = %#v, want completed 25mm pushback of %s", choiceResult, choice.LosingUnitID)
+	}
+	if !strings.Contains(strings.Join(pushed.Messages, "\n"), "Pushed "+choice.LosingUnitID+" 25mm.") {
+		t.Fatalf("pushback response missing feedback message: %v", pushed.Messages)
+	}
+
+	reloaded := getGame(t, srv, g.ID)
+	if reloaded.PendingCombatChoice != nil || unitByID(reloaded, choice.LosingUnitID).X != choiceUnitAfter.X || unitByID(reloaded, choice.LosingUnitID).Y != choiceUnitAfter.Y {
+		t.Fatalf("reloaded game did not persist pushback resolution: pending=%#v unit=%#v", reloaded.PendingCombatChoice, unitByID(reloaded, choice.LosingUnitID))
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/rewind", `{"actionIndex":`+itoa(pushed.Action.Index)+`}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("rewind pushback status %d: %s", res.Code, res.Body.String())
+	}
+	var rewound game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &rewound); err != nil {
+		t.Fatal(err)
+	}
+	if rewound.Game.PendingCombatChoice == nil || rewound.Game.PendingCombatChoice.EngagementID != choice.EngagementID {
+		t.Fatalf("rewind should restore pending combat choice: %#v", rewound.Game.PendingCombatChoice)
+	}
+	if len(rewound.Game.Engagements) != 1 || !rewound.Game.Engagements[0].Active {
+		t.Fatalf("rewind should restore active engagement: %#v", rewound.Game.Engagements)
+	}
+	rewoundUnit := unitByID(rewound.Game, choice.LosingUnitID)
+	if rewoundUnit.X != choiceUnitBefore.X || rewoundUnit.Y != choiceUnitBefore.Y {
+		t.Fatalf("rewind should restore losing unit position: got (%v,%v), want (%v,%v)", rewoundUnit.X, rewoundUnit.Y, choiceUnitBefore.X, choiceUnitBefore.Y)
+	}
+}
+
 func TestHTTPCombatCanCompleteGameAndRewind(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
 	if err != nil {

@@ -405,13 +405,14 @@ function createMiniswarApp() {
       const choice = this.pendingCombatChoice();
       if (!choice) return;
       this.clearActiveCommand();
+      const requestedDistanceMm = distanceMm > 0 ? distanceMm : this.defaultCombatChoiceDistance(combatChoice);
       const payload = {
         playerId: choice.winningPlayerId,
         unitId: choice.winningUnitId,
         type: "combat_pushback",
         combatChoice,
       };
-      if (distanceMm > 0) payload.distanceMm = distanceMm;
+      if (requestedDistanceMm > 0) payload.distanceMm = requestedDistanceMm;
       const response = await this.api(`/api/games/${this.game.id}/actions`, {
         method: "POST",
         body: JSON.stringify(payload),
@@ -586,6 +587,10 @@ function createMiniswarApp() {
         withdraw_25: "Withdraw 25mm",
         decline: "Decline",
       }[choice] || choice;
+    },
+
+    defaultCombatChoiceDistance(choice) {
+      return choice === "pushback_150" ? 150 : 0;
     },
 
     canActivate() {

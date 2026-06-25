@@ -132,6 +132,59 @@ func TestCreateActivateActionAndRewind(t *testing.T) {
 	}
 }
 
+func TestActionsEndpointAndInvalidRewind(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	srv := New(st, game.NewEngine(1)).Routes()
+	res := request(t, srv, http.MethodPost, "/api/games", `{"player1":{"baseWidthMm":25,"baseDepthMm":25,"count":5},"player2":{"baseWidthMm":25,"baseDepthMm":25,"count":5}}`)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("create status %d: %s", res.Code, res.Body.String())
+	}
+	var created game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	g := created.Game
+	unit := firstUnplacedUnitForPlayer(g, g.ActivePlayer)
+	x, y := placementPoint(unit.PlayerID)
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/placements", `{"playerId":`+itoa(unit.PlayerID)+`,"unitId":"`+unit.ID+`","x":`+itoa(x)+`,"y":`+itoa(y)+`}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("placement status %d: %s", res.Code, res.Body.String())
+	}
+	var placed game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &placed); err != nil {
+		t.Fatal(err)
+	}
+
+	res = request(t, srv, http.MethodGet, "/api/games/"+g.ID+"/actions", "")
+	if res.Code != http.StatusOK {
+		t.Fatalf("actions status %d: %s", res.Code, res.Body.String())
+	}
+	var timeline struct {
+		OK      bool                `json:"ok"`
+		Actions []game.ActionRecord `json:"actions"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &timeline); err != nil {
+		t.Fatal(err)
+	}
+	if !timeline.OK || len(timeline.Actions) != 1 || timeline.Actions[0].Type != game.ActionPlace || timeline.Actions[0].UnitID != unit.ID {
+		t.Fatalf("timeline = %#v, want one placement action for %s", timeline, unit.ID)
+	}
+
+	assertJSONError(t, request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/rewind", `{"actionIndex":99}`), http.StatusBadRequest, "game snapshot not found")
+
+	current := getGame(t, srv, g.ID)
+	currentUnit := unitByID(current, unit.ID)
+	placedUnit := unitByID(placed.Game, unit.ID)
+	if len(current.ActionHistory) != 1 || !currentUnit.Placed || currentUnit.X != placedUnit.X || currentUnit.Y != placedUnit.Y {
+		t.Fatalf("invalid rewind mutated current game: actions=%d unit=%#v", len(current.ActionHistory), currentUnit)
+	}
+}
+
 func TestGetGameIncludesShootLegalActionDetails(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
 	if err != nil {

@@ -580,8 +580,7 @@ function createMiniswarApp() {
 
     combatChoiceLabel(choice) {
       return {
-        pushback_25: "Push 25mm",
-        pushback_75: "Push 75mm",
+        pushback_150: "Push 150mm",
         withdraw_25: "Withdraw 25mm",
         decline: "Decline",
       }[choice] || choice;
@@ -1244,19 +1243,49 @@ function createMiniswarApp() {
       if (!choice) return;
       const unit = this.game?.units?.find((candidate) => candidate.id === choice.winningUnitId);
       if (!unit?.placed) return;
-      const positions = this.controlRowPositions(unit, choice.choices?.length || 0);
-      (choice.choices || []).forEach((combatChoice, index) => {
-        this.appendArenaControl(root, positions[index].x, positions[index].y, this.combatChoiceGlyph(combatChoice), unit.playerId, () => void this.resolveCombatChoice(combatChoice), this.combatChoiceLabel(combatChoice));
-      });
+      this.appendCombatChoiceLine(root, unit, choice);
+      if ((choice.choices || []).includes("decline")) {
+        const position = this.controlRowPosition(unit, 1);
+        this.appendArenaControl(root, position.x, position.y, "x", unit.playerId, () => void this.resolveCombatChoice("decline"), "Decline pushback");
+      }
     },
 
-    combatChoiceGlyph(choice) {
-      return {
-        pushback_25: "25",
-        pushback_75: "75",
-        withdraw_25: "<",
-        decline: "x",
-      }[choice] || "?";
+    appendCombatChoiceLine(root, unit, choice) {
+      const start = this.unitWorldCenter(unit);
+      const vector = this.combatChoiceVector(choice, unit);
+      const forwardChoice = (choice.choices || []).includes("pushback_150") ? "pushback_150" : "";
+      const backwardChoice = (choice.choices || []).includes("withdraw_25") ? "withdraw_25" : "";
+      if (forwardChoice) {
+        const end = { x: start.x + vector.x * 150, y: start.y + vector.y * 150 };
+        this.appendCombatChoiceSegment(root, unit, start, end, forwardChoice, "Push losing unit 150mm", true);
+      }
+      if (backwardChoice) {
+        const end = { x: start.x - vector.x * 25, y: start.y - vector.y * 25 };
+        this.appendCombatChoiceSegment(root, unit, start, end, backwardChoice, "Withdraw winning unit 25mm", false);
+      }
+    },
+
+    appendCombatChoiceSegment(root, unit, start, end, combatChoice, title, arrowHead) {
+      const group = this.svgElement("g", { class: `combat-choice-line p${unit.playerId}`, "data-arena-control": combatChoice });
+      group.addEventListener("click", (event) => {
+        event.stopPropagation();
+        void this.resolveCombatChoice(combatChoice);
+      });
+      group.appendChild(this.svgElement("title")).textContent = title;
+      group.appendChild(this.svgElement("line", { class: "move-arrow-hit", x1: start.x, y1: start.y, x2: end.x, y2: end.y }));
+      group.appendChild(this.svgElement("line", { x1: start.x, y1: start.y, x2: end.x, y2: end.y }));
+      if (arrowHead) {
+        const head = this.controlSize() * 0.35;
+        const angle = Math.atan2(end.y - start.y, end.x - start.x);
+        const left = { x: end.x - Math.cos(angle - Math.PI / 6) * head, y: end.y - Math.sin(angle - Math.PI / 6) * head };
+        const right = { x: end.x - Math.cos(angle + Math.PI / 6) * head, y: end.y - Math.sin(angle + Math.PI / 6) * head };
+        group.appendChild(this.svgElement("path", { d: `M ${end.x} ${end.y} L ${left.x} ${left.y} L ${right.x} ${right.y} Z` }));
+      }
+      root.appendChild(group);
+    },
+
+    combatChoiceVector(choice, unit) {
+      return this.moveVector(unit, "forward");
     },
 
     isEngagedUnit(unitId) {

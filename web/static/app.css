@@ -611,30 +611,41 @@ label {
   cursor: crosshair;
 }
 
-.move-arrow line {
+.move-arrow line,
+.combat-choice-line line {
   fill: none;
   stroke-width: 7;
   stroke-linecap: round;
   opacity: 0.82;
 }
 
-.move-arrow path {
+.move-arrow path,
+.combat-choice-line path {
   opacity: 0.88;
 }
 
 .move-arrow.p1 line,
-.move-arrow.p1 path {
+.move-arrow.p1 path,
+.combat-choice-line.p1 line,
+.combat-choice-line.p1 path {
   stroke: var(--blue);
   fill: var(--blue);
 }
 
 .move-arrow.p2 line,
-.move-arrow.p2 path {
+.move-arrow.p2 path,
+.combat-choice-line.p2 line,
+.combat-choice-line.p2 path {
   stroke: var(--red);
   fill: var(--red);
 }
 
-.move-arrow line.move-arrow-hit {
+.combat-choice-line {
+  cursor: pointer;
+}
+
+.move-arrow line.move-arrow-hit,
+.combat-choice-line line.move-arrow-hit {
   stroke: transparent;
   stroke-width: 22;
   opacity: 0;

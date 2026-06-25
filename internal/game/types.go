@@ -12,10 +12,9 @@ const (
 	ActionSkip           = "skip"
 	ActionCombatPushback = "combat_pushback"
 
-	CombatChoicePushback25 = "pushback_25"
-	CombatChoicePushback75 = "pushback_75"
-	CombatChoiceWithdraw25 = "withdraw_25"
-	CombatChoiceDecline    = "decline"
+	CombatChoicePushback150 = "pushback_150"
+	CombatChoiceWithdraw25  = "withdraw_25"
+	CombatChoiceDecline     = "decline"
 
 	UnitStatusDisordered = "disordered"
 	UnitStatusBroken     = "broken"
@@ -197,6 +196,7 @@ type CombatRoundResult struct {
 	BrokenUnits   []string             `json:"brokenUnits,omitempty"`
 	WinnerUnitID  string               `json:"winnerUnitId,omitempty"`
 	PendingChoice *PendingCombatChoice `json:"pendingChoice,omitempty"`
+	TiePushback   []CombatChoiceResult `json:"tiePushback,omitempty"`
 }
 
 type CombatSideResult struct {

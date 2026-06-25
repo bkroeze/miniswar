@@ -570,20 +570,16 @@ func (e *Engine) applyCombatChoice(g *Game, req ActionRequest) (*ActionRecord, e
 	messages := []string{}
 	result := map[string]any{"choice": req.CombatChoice, "pendingChoice": choice}
 	switch req.CombatChoice {
-	case CombatChoicePushback25, CombatChoicePushback75:
-		distance := 25.0
-		if req.CombatChoice == CombatChoicePushback75 {
-			distance = 75
-		}
-		dx, dy := pushbackVector(choice)
-		choiceResult := moveCombatChoiceUnit(g, choice.LosingUnitID, dx, dy, distance)
+	case CombatChoicePushback150:
+		dx, dy := pushbackVector(g, choice)
+		choiceResult := moveCombatChoiceUnit(g, choice.LosingUnitID, dx, dy, 150, choice.WinningUnitID)
 		choiceResult.Choice = req.CombatChoice
 		result["combatChoice"] = choiceResult
 		result["distanceMovedMm"] = choiceResult.MovedDistanceMM
 		messages = append(messages, fmt.Sprintf("Pushed %s %.0fmm.", choice.LosingUnitID, choiceResult.MovedDistanceMM))
 	case CombatChoiceWithdraw25:
-		dx, dy := withdrawVector(choice)
-		choiceResult := moveCombatChoiceUnit(g, choice.WinningUnitID, dx, dy, 25)
+		dx, dy := withdrawVector(g, choice)
+		choiceResult := moveCombatChoiceUnit(g, choice.WinningUnitID, dx, dy, 25, choice.LosingUnitID)
 		choiceResult.Choice = req.CombatChoice
 		result["combatChoice"] = choiceResult
 		result["distanceMovedMm"] = choiceResult.MovedDistanceMM
@@ -612,7 +608,7 @@ func (e *Engine) applyCombatChoice(g *Game, req ActionRequest) (*ActionRecord, e
 	return &rec, nil
 }
 
-func moveCombatChoiceUnit(g *Game, unitID string, dx, dy, distance float64) CombatChoiceResult {
+func moveCombatChoiceUnit(g *Game, unitID string, dx, dy, distance float64, ignoredUnitIDs ...string) CombatChoiceResult {
 	result := CombatChoiceResult{
 		MovingUnitID:        unitID,
 		RequestedDistanceMM: distance,
@@ -625,25 +621,31 @@ func moveCombatChoiceUnit(g *Game, unitID string, dx, dy, distance float64) Comb
 		result.StoppedBy = "missing_unit"
 		return result
 	}
+	ignored := map[string]bool{}
+	for _, ignoredUnitID := range ignoredUnitIDs {
+		if ignoredUnitID != "" && movingAwayFromUnit(g, *unit, ignoredUnitID, dx, dy) {
+			ignored[ignoredUnitID] = true
+		}
+	}
 	result.Start = Position{X: unit.X, Y: unit.Y}
 	moved := 0.0
 	for moved < distance {
 		step := minFloat(1, distance-moved)
+		snapshot := unitPositionSnapshot(g.Units)
 		nextX := unit.X + dx*step
 		nextY := unit.Y + dy*step
-		if !unitInsideBattlemap(*unit, nextX, nextY, g.Battlemap) || unitOverlapsTerrain(*unit, nextX, nextY, g.Battlemap.Terrains, TerrainImpassable) {
+		if !pushbackPositionValid(*unit, nextX, nextY, g) {
 			result.StoppedBy = "obstacle_or_arena"
-			break
-		}
-		candidate := *unit
-		candidate.X = nextX
-		candidate.Y = nextY
-		if unitOverlapsAnyUnit(candidate, nextX, nextY, g.Units) {
-			result.StoppedBy = "unit"
 			break
 		}
 		unit.X = nextX
 		unit.Y = nextY
+		if !resolvePushbackChain(g, unit.ID, dx, dy, ignored) {
+			restoreUnitPositionSnapshot(g.Units, snapshot)
+			unit, _ = findUnit(g, unitID)
+			result.StoppedBy = "unit"
+			break
+		}
 		moved += step
 	}
 	result.MovedDistanceMM = moved
@@ -651,18 +653,120 @@ func moveCombatChoiceUnit(g *Game, unitID string, dx, dy, distance float64) Comb
 	return result
 }
 
-func pushbackVector(choice *PendingCombatChoice) (float64, float64) {
+func unitPositionSnapshot(units []Unit) map[string]Position {
+	snapshot := make(map[string]Position, len(units))
+	for _, unit := range units {
+		snapshot[unit.ID] = Position{X: unit.X, Y: unit.Y}
+	}
+	return snapshot
+}
+
+func restoreUnitPositionSnapshot(units []Unit, snapshot map[string]Position) {
+	for i := range units {
+		if position, ok := snapshot[units[i].ID]; ok {
+			units[i].X = position.X
+			units[i].Y = position.Y
+		}
+	}
+}
+
+func movingAwayFromUnit(g *Game, moving Unit, otherUnitID string, dx, dy float64) bool {
+	other, ok := findUnit(g, otherUnitID)
+	if !ok {
+		return false
+	}
+	movingX, movingY := unitCenter(moving)
+	otherX, otherY := unitCenter(*other)
+	return (movingX-otherX)*dx+(movingY-otherY)*dy > 0
+}
+
+func resolvePushbackChain(g *Game, movedUnitID string, dx, dy float64, ignored map[string]bool) bool {
+	queue := []string{movedUnitID}
+	queued := map[string]bool{movedUnitID: true}
+	for len(queue) > 0 {
+		currentID := queue[0]
+		queue = queue[1:]
+		current, ok := findUnit(g, currentID)
+		if !ok {
+			continue
+		}
+		for i := range g.Units {
+			other := &g.Units[i]
+			if other.ID == current.ID || ignored[other.ID] || !other.Placed || other.Broken || activeMiniCount(*other) == 0 {
+				continue
+			}
+			distance := unitDistance(*current, *other)
+			if distance >= 25 {
+				continue
+			}
+			if !moveChainedUnitAway(g, other, *current, dx, dy, 25-distance) {
+				return false
+			}
+			if !queued[other.ID] {
+				queued[other.ID] = true
+				queue = append(queue, other.ID)
+			}
+		}
+	}
+	return true
+}
+
+func moveChainedUnitAway(g *Game, unit *Unit, source Unit, dx, dy, minDistance float64) bool {
+	moved := 0.0
+	for unitDistance(*unit, source) < 25 {
+		if moved > minDistance+200 {
+			return false
+		}
+		step := 1.0
+		nextX := unit.X + dx*step
+		nextY := unit.Y + dy*step
+		if !pushbackPositionValid(*unit, nextX, nextY, g) {
+			return false
+		}
+		unit.X = nextX
+		unit.Y = nextY
+		moved += step
+	}
+	return true
+}
+
+func pushbackPositionValid(unit Unit, x, y float64, g *Game) bool {
+	return unitInsideBattlemap(unit, x, y, g.Battlemap) && !unitOverlapsTerrain(unit, x, y, g.Battlemap.Terrains, TerrainImpassable)
+}
+
+func unitDistance(a, b Unit) float64 {
+	distance := math.Inf(1)
+	for _, mini := range a.Minis {
+		if mini.Removed {
+			continue
+		}
+		aPoly := miniWorldPolygon(a, mini, a.X, a.Y)
+		for _, otherMini := range b.Minis {
+			if otherMini.Removed {
+				continue
+			}
+			distance = math.Min(distance, polygonDistance(aPoly, miniWorldPolygon(b, otherMini, b.X, b.Y)))
+		}
+	}
+	if math.IsInf(distance, 1) {
+		return 0
+	}
+	return distance
+}
+
+func pushbackVector(g *Game, choice *PendingCombatChoice) (float64, float64) {
+	if winner, ok := findUnit(g, choice.WinningUnitID); ok {
+		return facingVector(winner.FacingDeg, 1)
+	}
 	if choice.WinningIsAttacker {
 		return choice.AxisDX, choice.AxisDY
 	}
 	return -choice.AxisDX, -choice.AxisDY
 }
 
-func withdrawVector(choice *PendingCombatChoice) (float64, float64) {
-	if choice.WinningIsAttacker {
-		return -choice.AxisDX, -choice.AxisDY
-	}
-	return choice.AxisDX, choice.AxisDY
+func withdrawVector(g *Game, choice *PendingCombatChoice) (float64, float64) {
+	dx, dy := pushbackVector(g, choice)
+	return -dx, -dy
 }
 
 func settleCurrentActivationAfterCombat(g *Game, unitID string) {
@@ -1625,6 +1729,9 @@ func (e *Engine) resolveCombatRound(g *Game, engagement CombatEngagement, action
 		result.WinnerUnitID = defender.ID
 		result.PendingChoice = createPendingCombatChoice(engagement, *defender, *attacker, actionIndex)
 		g.PendingCombatChoice = result.PendingChoice
+	} else {
+		result.TiePushback = applyTiePushback(g, *attacker, *defender)
+		deactivateEngagement(g, engagement.ID)
 	}
 	return result
 }
@@ -2004,11 +2111,32 @@ func createPendingCombatChoice(engagement CombatEngagement, winner, loser Unit, 
 		WinningUnitID:     winner.ID,
 		WinningIsAttacker: winner.ID == engagement.AttackerUnitID,
 		LosingUnitID:      loser.ID,
-		Choices:           []string{CombatChoicePushback25, CombatChoicePushback75, CombatChoiceWithdraw25, CombatChoiceDecline},
+		Choices:           []string{CombatChoicePushback150, CombatChoiceWithdraw25, CombatChoiceDecline},
 		AxisDX:            engagement.AxisDX,
 		AxisDY:            engagement.AxisDY,
 		SourceActionIndex: actionIndex,
 	}
+}
+
+func applyTiePushback(g *Game, attacker, defender Unit) []CombatChoiceResult {
+	attackerCX, attackerCY := unitCenter(attacker)
+	defenderCX, defenderCY := unitCenter(defender)
+	dx := attackerCX - defenderCX
+	dy := attackerCY - defenderCY
+	length := math.Hypot(dx, dy)
+	if length == 0 {
+		forwardX, forwardY := facingVector(attacker.FacingDeg, 1)
+		dx = -forwardX
+		dy = -forwardY
+		length = math.Hypot(dx, dy)
+	}
+	dx /= length
+	dy /= length
+	attackerResult := moveCombatChoiceUnit(g, attacker.ID, dx, dy, 25, defender.ID)
+	attackerResult.Choice = "tie_pushback"
+	defenderResult := moveCombatChoiceUnit(g, defender.ID, -dx, -dy, 25, attacker.ID)
+	defenderResult.Choice = "tie_pushback"
+	return []CombatChoiceResult{attackerResult, defenderResult}
 }
 
 func deactivateEngagement(g *Game, engagementID string) {
@@ -2044,6 +2172,11 @@ func combatMessages(result CombatRoundResult) []string {
 	}
 	if result.PendingChoice != nil {
 		messages = append(messages, fmt.Sprintf("%s won combat; choose pushback, withdraw, or decline.", result.WinnerUnitID))
+	}
+	if len(result.TiePushback) > 0 {
+		for _, pushback := range result.TiePushback {
+			messages = append(messages, fmt.Sprintf("Tied combat pushed %s %.0fmm.", pushback.MovingUnitID, pushback.MovedDistanceMM))
+		}
 	}
 	return messages
 }

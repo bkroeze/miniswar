@@ -239,6 +239,8 @@ func newUnit(player int, id, name string, setup UnitSetup, activation, x, y, fac
 		CurrentHealth:    setup.CurrentHealth,
 		CurrentHealthSet: setup.CurrentHealthSet,
 		Stats:            setup.Stats,
+		Special:          slices.Clone(setup.Special),
+		Equipment:        slices.Clone(setup.Equipment),
 		Base:             base,
 		ActivationNumber: activation,
 		MovementLimitMM:  movementLimitMM(setup.Stats),
@@ -511,6 +513,16 @@ func (e *Engine) ApplyAction(g *Game, req ActionRequest) (*ActionRecord, error) 
 		}
 		*unit = candidate
 		messages = append(messages, "About face completed.")
+	case ActionShoot:
+		shootResult, err := e.applyShoot(g, unit, act, req)
+		if err != nil {
+			return nil, err
+		}
+		result["shooting"] = shootResult
+		messages = append(messages, shootingMessages(shootResult)...)
+		if message := completeGameIfWon(g); message != "" {
+			messages = append(messages, message)
+		}
 	case ActionSkip:
 		skipped := act.ActionsRemaining
 		act.ActionsRemaining = 1
@@ -523,6 +535,9 @@ func (e *Engine) ApplyAction(g *Game, req ActionRequest) (*ActionRecord, error) 
 		act.ActionsRemaining--
 		if req.Type == ActionMove {
 			act.MovesTaken++
+		}
+		if req.Type == ActionShoot {
+			act.ShotsTaken++
 		}
 		if act.ActionsRemaining == 0 && g.PendingCombatChoice == nil {
 			g.CurrentActivation = nil
@@ -797,6 +812,528 @@ func (e *Engine) applyMove(g *Game, unit *Unit, act *Activation, req ActionReque
 		return MoveResult{Status: "blocked", DistanceMM: 0}, nil
 	}
 	return MoveResult{Status: "moved", DistanceMM: moved}, nil
+}
+
+var shootingWeaponRanges = map[string]int{
+	"Bow":            20,
+	"Elf Bow":        22,
+	"Sling":          12,
+	"Light Catapult": 32,
+	"Heavy Catapult": 40,
+	"Ballista":       30,
+	"Fire Breath":    12,
+}
+
+func (e *Engine) applyShoot(g *Game, unit *Unit, act *Activation, req ActionRequest) (ShootResult, error) {
+	if !act.Success {
+		return ShootResult{}, errors.New("failed activations may only take simple actions")
+	}
+	if req.TargetUnitID == "" {
+		return ShootResult{}, errors.New("shoot action requires a target unit id")
+	}
+	target, ok := findUnit(g, req.TargetUnitID)
+	if !ok {
+		return ShootResult{}, errors.New("target unit not found")
+	}
+	if target.PlayerID == unit.PlayerID {
+		return ShootResult{}, errors.New("shooting target must be an enemy unit")
+	}
+	if target.Broken || !target.Placed || activeMiniCount(*target) == 0 {
+		return ShootResult{}, errors.New("shooting target is no longer on the battlefield")
+	}
+	detail, err := legalShootTarget(g, *unit, *target, act)
+	if err != nil {
+		return ShootResult{}, err
+	}
+
+	targetNumber, modifiers := shootingTargetNumber(g, *unit, *target, act)
+	dice := shootingDiceCount(*unit, *target)
+	rolls := make([]int, 0, dice)
+	hits := 0
+	for i := 0; i < dice; i++ {
+		roll := rollD10(g)
+		rolls = append(rolls, roll)
+		hits += hitsForRoll(roll, targetNumber)
+	}
+	hitResult := applyHitsToUnit(target, hits)
+	removeUnitIfNoActiveMinis(target)
+	moraleTested := moraleTestedThisRound(g)
+	var moraleTests []MoraleTestResult
+	if moraleRequired(*target, hitResult) && activeMiniCount(*target) > 0 {
+		if morale, ok := e.resolveShootingMoraleOnce(g, target, moraleTested); ok {
+			moraleTests = append(moraleTests, morale)
+		}
+	}
+	if target.Broken {
+		moraleTests = append(moraleTests, e.resolveBrokenCascade(g, target.ID, moraleTested)...)
+	}
+	brokenUnits := brokenUnitsFromMorale(moraleTests)
+	if target.Broken {
+		brokenUnits = appendUniqueString(brokenUnits, target.ID)
+	}
+	return ShootResult{
+		TargetUnitID:  target.ID,
+		Weapon:        detail.Weapon,
+		RangeMM:       detail.RangeMM,
+		RangeLimitMM:  detail.RangeLimitMM,
+		LOS:           detail.LOS,
+		DiceCount:     dice,
+		TargetNumber:  targetNumber,
+		Modifiers:     modifiers,
+		Rolls:         rolls,
+		Hits:          hits,
+		Casualties:    hitResult.Casualties,
+		MoraleTests:   moraleTests,
+		BrokenUnits:   brokenUnits,
+		TargetRemoved: target.Broken || !target.Placed || activeMiniCount(*target) == 0,
+	}, nil
+}
+
+func legalShootTarget(g *Game, attacker, target Unit, act *Activation) (ShootTarget, error) {
+	weapon, rangeMM, ok := shootingWeapon(attacker)
+	if !ok {
+		return ShootTarget{}, errors.New("unit has no shooting weapon")
+	}
+	if act == nil || act.UnitID != attacker.ID || act.PlayerID != attacker.PlayerID {
+		return ShootTarget{}, errors.New("shooting requires the current activation")
+	}
+	if act.ActionsRemaining < 1 {
+		return ShootTarget{}, errors.New("no actions remaining")
+	}
+	if act.ShotsTaken > 0 {
+		return ShootTarget{}, errors.New("unit has already shot this activation")
+	}
+	if !act.Success {
+		return ShootTarget{}, errors.New("failed activations may only take simple actions")
+	}
+	if attacker.Broken || !attacker.Placed || activeMiniCount(attacker) == 0 {
+		return ShootTarget{}, errors.New("shooting unit is no longer on the battlefield")
+	}
+	if unitInActiveCombat(g, attacker.ID) {
+		return ShootTarget{}, errors.New("units in combat cannot shoot")
+	}
+	if unitInActiveCombat(g, target.ID) {
+		return ShootTarget{}, errors.New("units in combat cannot be targeted by shooting")
+	}
+	distance := shootingRangeMM(attacker, target)
+	if distance > rangeMM+0.000001 {
+		return ShootTarget{}, fmt.Errorf("target is out of range: %.0fmm > %.0fmm", distance, rangeMM)
+	}
+	los := lineOfSight(g, attacker, target)
+	if !los.OK {
+		return ShootTarget{}, errors.New("target is not in line of sight")
+	}
+	cx, cy := unitCenter(target)
+	return ShootTarget{
+		UnitID:       target.ID,
+		Weapon:       weapon,
+		RangeMM:      distance,
+		RangeLimitMM: rangeMM,
+		LOS:          los,
+		Center:       Position{X: cx, Y: cy},
+	}, nil
+}
+
+func LegalActionDetails(g *Game) []LegalAction {
+	actions := LegalActions(g)
+	if len(actions) == 0 {
+		return nil
+	}
+	details := make([]LegalAction, 0, len(actions))
+	for _, action := range actions {
+		detail := LegalAction{Type: action}
+		if action == ActionShoot {
+			detail.Targets = legalShootTargets(g)
+		}
+		details = append(details, detail)
+	}
+	return details
+}
+
+func legalShootTargets(g *Game) []ShootTarget {
+	if g == nil || g.CurrentActivation == nil {
+		return nil
+	}
+	attacker, ok := findUnit(g, g.CurrentActivation.UnitID)
+	if !ok {
+		return nil
+	}
+	targets := []ShootTarget{}
+	for _, target := range g.Units {
+		if target.PlayerID == attacker.PlayerID || target.Broken || !target.Placed || activeMiniCount(target) == 0 {
+			continue
+		}
+		detail, err := legalShootTarget(g, *attacker, target, g.CurrentActivation)
+		if err == nil {
+			targets = append(targets, detail)
+		}
+	}
+	return targets
+}
+
+func shootingWeapon(unit Unit) (string, float64, bool) {
+	fields := append([]string{}, unit.Equipment...)
+	fields = append(fields, unit.Special...)
+	fields = append(fields, unit.Name)
+	bestName := ""
+	bestRange := 0
+	for weapon, rangeUnits := range shootingWeaponRanges {
+		for _, field := range fields {
+			if strings.Contains(normalizeRuleToken(field), normalizeRuleToken(weapon)) {
+				if rangeUnits > bestRange {
+					bestName = weapon
+					bestRange = rangeUnits
+				}
+			}
+		}
+	}
+	if bestName == "" {
+		return "", 0, false
+	}
+	return bestName, float64(bestRange * 25), true
+}
+
+func hasSpecialAbility(unit Unit, ability string) bool {
+	needle := normalizeRuleToken(ability)
+	for _, special := range unit.Special {
+		if strings.Contains(normalizeRuleToken(special), needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeRuleToken(value string) string {
+	value = strings.ToLower(value)
+	replacer := strings.NewReplacer("-", " ", "_", " ", "(", " ", ")", " ", ",", " ", ":", " ")
+	value = replacer.Replace(value)
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func unitInActiveCombat(g *Game, unitID string) bool {
+	for _, engagement := range g.Engagements {
+		if !engagement.Active {
+			continue
+		}
+		if engagement.AttackerUnitID == unitID || engagement.DefenderUnitID == unitID {
+			return true
+		}
+	}
+	return false
+}
+
+func shootingRangeMM(attacker, target Unit) float64 {
+	officer, err := pivotAnchor(&attacker, "")
+	if err != nil {
+		ax, ay := unitCenter(attacker)
+		tx, ty := unitCenter(target)
+		return math.Hypot(tx-ax, ty-ay)
+	}
+	attackerPoints := miniPolygonPoints(miniWorldPolygon(attacker, officer, attacker.X, attacker.Y))
+	distance := math.Inf(1)
+	for _, targetMini := range target.Minis {
+		if targetMini.Removed || miniHealth(target, targetMini) <= 0 {
+			continue
+		}
+		for _, a := range attackerPoints {
+			for _, b := range miniPolygonPoints(miniWorldPolygon(target, targetMini, target.X, target.Y)) {
+				distance = math.Min(distance, math.Hypot(b[0]-a[0], b[1]-a[1]))
+			}
+		}
+	}
+	if math.IsInf(distance, 1) {
+		return 0
+	}
+	return distance
+}
+
+func shootingDiceCount(attacker, target Unit) int {
+	dice := attacker.Stats.CD * activeFrontRankCount(attacker)
+	if hasSpecialAbility(target, "Shielding") {
+		dice--
+	}
+	if dice < 1 {
+		return 1
+	}
+	return dice
+}
+
+func shootingTargetNumber(g *Game, attacker, defender Unit, act *Activation) (int, []CombatModifier) {
+	target := defender.Stats.D - attacker.Stats.A
+	var modifiers []CombatModifier
+	add := func(label string, value int) {
+		if value == 0 {
+			return
+		}
+		modifiers = append(modifiers, CombatModifier{Label: label, Value: value})
+		target += value
+	}
+	add("shooting ranks", -max(0, activeFullRanks(attacker)-1))
+	if act != nil && act.ActionsRemaining == 1 {
+		add("second action of activation", 1)
+	}
+	if attacker.Disordered {
+		add("shooter disordered", 1)
+	}
+	add("target light cover", shootingCoverModifier(g, defender, "light"))
+	add("target heavy cover", shootingCoverModifier(g, defender, "heavy"))
+	return target, modifiers
+}
+
+func shootingCoverModifier(g *Game, defender Unit, cover string) int {
+	_ = g
+	_ = defender
+	_ = cover
+	return 0
+}
+
+func (e *Engine) resolveShootingMoraleOnce(g *Game, unit *Unit, tested map[string]bool) (MoraleTestResult, bool) {
+	if tested[unit.ID] {
+		return MoraleTestResult{}, false
+	}
+	target, modifiers := moraleTargetNumber(*unit, false, true)
+	rolls := []int{rollD10(g), rollD10(g)}
+	passed := rolls[0] >= target || rolls[1] >= target
+	outcome := "passed"
+	wasDisordered := unit.Disordered
+	if !passed {
+		if wasDisordered {
+			unit.Broken = true
+			unit.Placed = false
+			deactivateEngagementsForUnit(g, unit.ID)
+			outcome = UnitStatusBroken
+		} else {
+			unit.Disordered = true
+			outcome = UnitStatusDisordered
+		}
+	}
+	tested[unit.ID] = true
+	return MoraleTestResult{
+		UnitID:       unit.ID,
+		Rolls:        rolls,
+		TargetNumber: target,
+		Modifiers:    modifiers,
+		Passed:       passed,
+		Cascade:      false,
+		Outcome:      outcome,
+	}, true
+}
+
+func shootingMessages(result ShootResult) []string {
+	messages := []string{
+		fmt.Sprintf("Shot %s with %s at %.0fmm: rolled %v vs TN %d for %d hit(s).",
+			result.TargetUnitID, result.Weapon, result.RangeMM, result.Rolls, result.TargetNumber, result.Hits),
+	}
+	for _, casualty := range result.Casualties {
+		if casualty.Removed {
+			messages = append(messages, fmt.Sprintf("%s removed from %s.", casualty.MiniKey, casualty.UnitID))
+		}
+	}
+	for _, morale := range result.MoraleTests {
+		messages = append(messages, fmt.Sprintf("%s shooting morale rolled %v against %d: %s.", morale.UnitID, morale.Rolls, morale.TargetNumber, morale.Outcome))
+	}
+	return messages
+}
+
+func lineOfSight(g *Game, attacker, target Unit) LineOfSightResult {
+	if hasSpecialAbility(attacker, "Indirect Fire") {
+		return LineOfSightResult{OK: true, TargetFacing: "indirect", Indirect: true}
+	}
+	officer, err := pivotAnchor(&attacker, "")
+	if err != nil {
+		return LineOfSightResult{OK: false, BlockedBy: "no_officer"}
+	}
+	if activeMiniCount(target) == 1 {
+		for _, mini := range target.Minis {
+			if mini.Removed || miniHealth(target, mini) <= 0 {
+				continue
+			}
+			if canSeeMini(g, attacker, officer, target, mini, "") {
+				return LineOfSightResult{OK: true, TargetFacing: "single", RequiredFigures: 1, VisibleFigures: 1, VisibleMiniKeys: []string{mini.Key}}
+			}
+			return LineOfSightResult{OK: false, TargetFacing: "single", RequiredFigures: 1}
+		}
+	}
+	best := LineOfSightResult{}
+	for _, face := range []string{CombatFaceFront, CombatFaceRight, CombatFaceRear, CombatFaceLeft} {
+		figures := targetFacingMinis(target, face)
+		if len(figures) == 0 {
+			continue
+		}
+		required := (len(figures) + 1) / 2
+		result := LineOfSightResult{TargetFacing: face, RequiredFigures: required}
+		for _, mini := range figures {
+			if canSeeMini(g, attacker, officer, target, mini, face) {
+				result.VisibleFigures++
+				result.VisibleMiniKeys = append(result.VisibleMiniKeys, mini.Key)
+			}
+		}
+		if result.VisibleFigures > best.VisibleFigures {
+			best = result
+		}
+		if result.VisibleFigures >= required {
+			result.OK = true
+			return result
+		}
+	}
+	if best.TargetFacing == "" {
+		best.BlockedBy = "no_target_figures"
+	} else {
+		best.BlockedBy = "blocked_or_out_of_arc"
+	}
+	return best
+}
+
+func canSeeMini(g *Game, attacker Unit, officer Mini, target Unit, targetMini Mini, targetFace string) bool {
+	fromPoints := miniPolygonPoints(miniWorldPolygon(attacker, officer, attacker.X, attacker.Y))
+	toPoints := targetMiniSightPoints(target, targetMini, targetFace)
+	for _, from := range fromPoints {
+		for _, to := range toPoints {
+			if !pointInFrontArc(attacker, to[0], to[1]) {
+				continue
+			}
+			if !lineBlocked(g, attacker, target, targetMini.Key, from[0], from[1], to[0], to[1]) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func miniPolygonPoints(poly [4][2]float64) [][2]float64 {
+	cx := 0.0
+	cy := 0.0
+	points := make([][2]float64, 0, 5)
+	for _, point := range poly {
+		points = append(points, point)
+		cx += point[0]
+		cy += point[1]
+	}
+	points = append(points, [2]float64{cx / 4, cy / 4})
+	return points
+}
+
+func targetMiniSightPoints(unit Unit, mini Mini, face string) [][2]float64 {
+	poly := miniWorldPolygon(unit, mini, unit.X, unit.Y)
+	if face == "" {
+		return miniPolygonPoints(poly)
+	}
+	var local [][2]float64
+	switch face {
+	case CombatFaceFront:
+		local = [][2]float64{{mini.RelX, mini.RelY}, {mini.RelX + float64(mini.WidthMM)/2, mini.RelY}, {mini.RelX + float64(mini.WidthMM), mini.RelY}}
+	case CombatFaceRear:
+		y := mini.RelY + float64(mini.DepthMM)
+		local = [][2]float64{{mini.RelX, y}, {mini.RelX + float64(mini.WidthMM)/2, y}, {mini.RelX + float64(mini.WidthMM), y}}
+	case CombatFaceRight:
+		x := mini.RelX + float64(mini.WidthMM)
+		local = [][2]float64{{x, mini.RelY}, {x, mini.RelY + float64(mini.DepthMM)/2}, {x, mini.RelY + float64(mini.DepthMM)}}
+	case CombatFaceLeft:
+		local = [][2]float64{{mini.RelX, mini.RelY}, {mini.RelX, mini.RelY + float64(mini.DepthMM)/2}, {mini.RelX, mini.RelY + float64(mini.DepthMM)}}
+	default:
+		return miniPolygonPoints(poly)
+	}
+	points := make([][2]float64, 0, len(local))
+	for _, point := range local {
+		x, y := rotatePoint(point[0], point[1], unit.FacingDeg)
+		points = append(points, [2]float64{unit.X + x, unit.Y + y})
+	}
+	return points
+}
+
+func pointInFrontArc(unit Unit, x, y float64) bool {
+	officer, err := pivotAnchor(&unit, "")
+	if err != nil {
+		return false
+	}
+	ox, oy := miniWorldCenter(unit, officer, unit.FacingDeg)
+	dx := x - ox
+	dy := y - oy
+	if math.Hypot(dx, dy) <= 0.000001 {
+		return true
+	}
+	targetDeg := normalizeDeg(int(math.Round(math.Atan2(dx, -dy) * 180 / math.Pi)))
+	return angleDifferenceDeg(unit.FacingDeg, targetDeg) <= 90
+}
+
+func angleDifferenceDeg(a, b int) int {
+	diff := math.Abs(float64(((a-b)%360+540)%360 - 180))
+	return int(diff)
+}
+
+func lineBlocked(g *Game, attacker, target Unit, targetMiniKey string, ax, ay, bx, by float64) bool {
+	for _, terrain := range g.Battlemap.Terrains {
+		if terrainBlocksLineOfSight(terrain, target, ax, ay, bx, by) {
+			return true
+		}
+	}
+	for _, unit := range g.Units {
+		if unit.ID == attacker.ID || unit.ID == target.ID || !unit.Placed || unit.Broken || activeMiniCount(unit) == 0 {
+			continue
+		}
+		if !blocksLineOfSightTo(unit, target) {
+			continue
+		}
+		for _, mini := range unit.Minis {
+			if mini.Removed || miniHealth(unit, mini) <= 0 {
+				continue
+			}
+			if segmentIntersectsRect(ax, ay, bx, by, polygonBounds(miniWorldPolygon(unit, mini, unit.X, unit.Y))) {
+				return true
+			}
+		}
+	}
+	_ = targetMiniKey
+	return false
+}
+
+func terrainBlocksLineOfSight(terrain TerrainZone, target Unit, ax, ay, bx, by float64) bool {
+	_ = terrain
+	_ = target
+	_ = ax
+	_ = ay
+	_ = bx
+	_ = by
+	return false
+}
+
+func blocksLineOfSightTo(blockingUnit, targetUnit Unit) bool {
+	if hasSpecialAbility(targetUnit, "Enormous") {
+		return hasSpecialAbility(blockingUnit, "Enormous")
+	}
+	if hasSpecialAbility(targetUnit, "Large") {
+		return hasSpecialAbility(blockingUnit, "Large")
+	}
+	return true
+}
+
+func targetFacingMinis(unit Unit, face string) []Mini {
+	bounds := activeLocalBounds(unit)
+	var out []Mini
+	for _, mini := range unit.Minis {
+		if mini.Removed || miniHealth(unit, mini) <= 0 {
+			continue
+		}
+		switch face {
+		case CombatFaceFront:
+			if math.Abs(mini.RelY-bounds.minY) <= 0.000001 {
+				out = append(out, mini)
+			}
+		case CombatFaceRear:
+			if math.Abs(mini.RelY+float64(mini.DepthMM)-bounds.maxY) <= 0.000001 {
+				out = append(out, mini)
+			}
+		case CombatFaceRight:
+			if math.Abs(mini.RelX+float64(mini.WidthMM)-bounds.maxX) <= 0.000001 {
+				out = append(out, mini)
+			}
+		case CombatFaceLeft:
+			if math.Abs(mini.RelX-bounds.minX) <= 0.000001 {
+				out = append(out, mini)
+			}
+		}
+	}
+	return out
 }
 
 func facingVector(facingDeg int, sign float64) (float64, float64) {
@@ -1630,7 +2167,12 @@ func LegalActions(g *Game) []string {
 	if g.CurrentActivation == nil {
 		return []string{ActionActivate}
 	}
-	return []string{ActionMove, ActionPivot, ActionAboutFace, ActionSkip}
+	actions := []string{ActionMove, ActionPivot, ActionAboutFace}
+	if len(legalShootTargets(g)) > 0 {
+		actions = append(actions, ActionShoot)
+	}
+	actions = append(actions, ActionSkip)
+	return actions
 }
 
 func placementUnitID(g *Game) (string, bool) {

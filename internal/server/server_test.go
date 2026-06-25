@@ -132,6 +132,59 @@ func TestCreateActivateActionAndRewind(t *testing.T) {
 	}
 }
 
+func TestGetGameIncludesShootLegalActionDetails(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	engine := game.NewEngine(1)
+	g, err := engine.NewGame(game.Setup{
+		Player1: game.UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, Stats: game.UnitStats{A: 6, D: 8, CD: 1, H: 1}, Equipment: []string{"Bow"}},
+		Player2: game.UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, Stats: game.UnitStats{A: 5, D: 8, CD: 1, H: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Phase = "activated"
+	g.ActivePlayer = 1
+	g.CurrentActivation = &game.Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 2}
+	g.Units[0].Placed = true
+	g.Units[0].X = 100
+	g.Units[0].Y = 300
+	g.Units[0].FacingDeg = 0
+	g.Units[1].Placed = true
+	g.Units[1].X = 100
+	g.Units[1].Y = 100
+	g.Units[1].FacingDeg = 180
+	if err := st.SaveGame(g); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(st, engine).Routes()
+	res := request(t, srv, http.MethodGet, "/api/games/"+g.ID, "")
+	if res.Code != http.StatusOK {
+		t.Fatalf("get status %d: %s", res.Code, res.Body.String())
+	}
+	var got game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !containsLegalAction(got.LegalActions, game.ActionShoot) {
+		t.Fatalf("legal actions = %v, want shoot", got.LegalActions)
+	}
+	var shoot game.LegalAction
+	for _, detail := range got.LegalActionDetails {
+		if detail.Type == game.ActionShoot {
+			shoot = detail
+		}
+	}
+	if len(shoot.Targets) != 1 || shoot.Targets[0].UnitID != "u2" || shoot.Targets[0].Weapon != "Bow" {
+		t.Fatalf("shoot details = %+v, want one bow target", shoot)
+	}
+}
+
 func TestCombatHTTPFlowPersistsPendingChoiceAndRewinds(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
 	if err != nil {
@@ -890,6 +943,15 @@ func unitByID(g *game.Game, id string) game.Unit {
 		}
 	}
 	return game.Unit{}
+}
+
+func containsLegalAction(actions []string, want string) bool {
+	for _, action := range actions {
+		if action == want {
+			return true
+		}
+	}
+	return false
 }
 
 func firstUnplacedUnitForPlayer(g *game.Game, playerID int) game.Unit {

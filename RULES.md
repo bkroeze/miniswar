@@ -53,6 +53,7 @@ When activated, unless special rules apply, each unit gets 2 actions.  They can 
 - Move, up to the unit's movement limit in a straight line forward, or backwards up to half of the unit's movement.  If this is done a second time in one activation, the movement rate is halved.  A unit with an `M` stat moves `M * 25mm`; otherwise it uses the default `100mm`.
 - Pivot, done by pivoting about the officer to any new direction
 - About Face - which reorganizes the back line with a full line and moves the officer
+- Shoot at one enemy unit with a listed shooting weapon
 - Skip - end the current activation's remaining actions
 
 Special abilities are planned rules, but are not currently available actions.

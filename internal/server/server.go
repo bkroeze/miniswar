@@ -164,7 +164,7 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, game.APIResponse{OK: true, Game: g, LegalActions: game.LegalActions(g), Messages: []string{"Game created."}})
+	writeJSON(w, http.StatusCreated, gameResponse(g, nil, nil, []string{"Game created."}))
 }
 
 func (s *Server) gameArmyUnitSetups(w http.ResponseWriter, armyID string, playerID int) ([]game.UnitSetup, bool) {
@@ -203,7 +203,7 @@ func (s *Server) getGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Game: g, LegalActions: game.LegalActions(g)})
+	writeJSON(w, http.StatusOK, gameResponse(g, nil, nil, nil))
 }
 
 func (s *Server) getGameStep(w http.ResponseWriter, r *http.Request) {
@@ -224,7 +224,7 @@ func (s *Server) getGameStep(w http.ResponseWriter, r *http.Request) {
 	currentStep := len(g.ActionHistory)
 	switch {
 	case step == currentStep:
-		writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Game: g, LegalActions: game.LegalActions(g)})
+		writeJSON(w, http.StatusOK, gameResponse(g, nil, nil, nil))
 		return
 	case step > currentStep:
 		writeErrorMessage(w, http.StatusNotFound, "game step "+strconv.Itoa(step)+" not found")
@@ -249,7 +249,9 @@ func (s *Server) getGameStep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stepGame.Snapshots = g.Snapshots
-	writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Game: stepGame, LegalActions: game.LegalActions(stepGame), ReadOnly: true})
+	response := gameResponse(stepGame, nil, nil, nil)
+	response.ReadOnly = true
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) placeUnit(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +279,7 @@ func (s *Server) placeUnit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Game: g, Action: rec, LegalActions: game.LegalActions(g), Messages: rec.Messages})
+	writeJSON(w, http.StatusOK, gameResponse(g, rec, nil, rec.Messages))
 }
 
 func (s *Server) activate(w http.ResponseWriter, r *http.Request) {
@@ -305,7 +307,7 @@ func (s *Server) activate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Game: g, Action: rec, Roll: roll, LegalActions: game.LegalActions(g), Messages: rec.Messages})
+	writeJSON(w, http.StatusOK, gameResponse(g, rec, roll, rec.Messages))
 }
 
 func (s *Server) action(w http.ResponseWriter, r *http.Request) {
@@ -333,7 +335,7 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Game: g, Action: rec, LegalActions: game.LegalActions(g), Messages: rec.Messages})
+	writeJSON(w, http.StatusOK, gameResponse(g, rec, nil, rec.Messages))
 }
 
 func (s *Server) actions(w http.ResponseWriter, r *http.Request) {
@@ -369,7 +371,7 @@ func (s *Server) rewind(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, game.APIResponse{OK: true, Game: g, LegalActions: game.LegalActions(g), Messages: []string{"Game rewound."}})
+	writeJSON(w, http.StatusOK, gameResponse(g, nil, nil, []string{"Game rewound."}))
 }
 
 func (s *Server) catalogUnits(w http.ResponseWriter, r *http.Request) {
@@ -859,6 +861,18 @@ func (s *Server) persistMutation(g *game.Game, actionIndex int, before string) e
 		return err
 	}
 	return s.store.SaveGame(g)
+}
+
+func gameResponse(g *game.Game, action *game.ActionRecord, roll []int, messages []string) game.APIResponse {
+	return game.APIResponse{
+		OK:                 true,
+		Game:               g,
+		Action:             action,
+		Roll:               roll,
+		LegalActions:       game.LegalActions(g),
+		LegalActionDetails: game.LegalActionDetails(g),
+		Messages:           messages,
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

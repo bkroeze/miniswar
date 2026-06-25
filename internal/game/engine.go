@@ -682,10 +682,18 @@ func movingAwayFromUnit(g *Game, moving Unit, otherUnitID string, dx, dy float64
 
 func resolvePushbackChain(g *Game, movedUnitID string, dx, dy float64, ignored map[string]bool) bool {
 	queue := []string{movedUnitID}
-	queued := map[string]bool{movedUnitID: true}
+	inQueue := map[string]bool{movedUnitID: true}
+	touched := map[string]bool{movedUnitID: true}
+	iterations := 0
+	maxIterations := max(1, len(g.Units)*1000)
 	for len(queue) > 0 {
+		iterations++
+		if iterations > maxIterations {
+			return false
+		}
 		currentID := queue[0]
 		queue = queue[1:]
+		inQueue[currentID] = false
 		current, ok := findUnit(g, currentID)
 		if !ok {
 			continue
@@ -702,13 +710,14 @@ func resolvePushbackChain(g *Game, movedUnitID string, dx, dy float64, ignored m
 			if !moveChainedUnitAway(g, other, *current, dx, dy, 25-distance) {
 				return false
 			}
-			if !queued[other.ID] {
-				queued[other.ID] = true
+			touched[other.ID] = true
+			if !inQueue[other.ID] {
+				inQueue[other.ID] = true
 				queue = append(queue, other.ID)
 			}
 		}
 	}
-	return true
+	return pushbackTouchedUnitsHaveClearance(g, touched, ignored)
 }
 
 func moveChainedUnitAway(g *Game, unit *Unit, source Unit, dx, dy, minDistance float64) bool {
@@ -732,6 +741,25 @@ func moveChainedUnitAway(g *Game, unit *Unit, source Unit, dx, dy, minDistance f
 
 func pushbackPositionValid(unit Unit, x, y float64, g *Game) bool {
 	return unitInsideBattlemap(unit, x, y, g.Battlemap) && !unitOverlapsTerrain(unit, x, y, g.Battlemap.Terrains, TerrainImpassable)
+}
+
+func pushbackTouchedUnitsHaveClearance(g *Game, touched map[string]bool, ignored map[string]bool) bool {
+	for i := range g.Units {
+		unit := &g.Units[i]
+		if !touched[unit.ID] || ignored[unit.ID] || !unit.Placed || unit.Broken || activeMiniCount(*unit) == 0 {
+			continue
+		}
+		for j := range g.Units {
+			other := &g.Units[j]
+			if unit.ID == other.ID || ignored[other.ID] || !other.Placed || other.Broken || activeMiniCount(*other) == 0 {
+				continue
+			}
+			if unitDistance(*unit, *other) < 25 {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func unitDistance(a, b Unit) float64 {

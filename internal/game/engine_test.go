@@ -674,6 +674,39 @@ func TestCombatChoicePushbackChainsContactedUnit(t *testing.T) {
 	}
 }
 
+func TestCombatChoicePushbackRechecksPreviouslyProcessedChainedUnit(t *testing.T) {
+	engine := NewEngine(40)
+	g := combatChoiceGame()
+	g.Units[0].X = 50
+	g.Units[0].Y = 100
+	g.Units[0].FacingDeg = 90
+	g.Units[1].X = 75
+	g.Units[1].Y = 100
+	g.PendingCombatChoice.AxisDX = 1
+	g.PendingCombatChoice.AxisDY = 0
+	g.PendingCombatChoice.WinningIsAttacker = true
+
+	alreadyProcessed := formationUnit("u3", 2, 149, 100, 90, 1)
+	secondContact := formationUnit("u4", 2, 125, 100, 90, 1)
+	downstream := formationUnit("u5", 2, 198, 100, 90, 1)
+	g.Units = append(g.Units, alreadyProcessed, secondContact, downstream)
+
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150}); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := range g.Units {
+		for j := i + 1; j < len(g.Units); j++ {
+			if g.Units[i].ID == "u1" || g.Units[j].ID == "u1" {
+				continue
+			}
+			if distance := mathRound(unitDistance(g.Units[i], g.Units[j])); distance < 25 {
+				t.Fatalf("%s and %s clearance = %.0fmm, want at least 25mm", g.Units[i].ID, g.Units[j].ID, distance)
+			}
+		}
+	}
+}
+
 func TestTiedFrontToFrontCombatAutomaticallyPushesBothUnits(t *testing.T) {
 	engine := NewEngine(41)
 	attacker := formationUnit("u1", 1, 100, 100, 0, 1)

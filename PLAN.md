@@ -64,7 +64,7 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
   - `POST /api/games/{id}/activate` activates a unit from `{ "playerId": number, "unitId": string }`, rolls `2d10`, records success/failure, may resolve engagement combat, and returns available actions with legal target details when shooting is available.
   - `POST /api/games/{id}/actions` applies `move`, `pivot`, `about_face`, `shoot`, `skip`, or `combat_pushback` from an action request with `playerId`, `unitId`, `type`, and type-specific fields such as `direction`, `distanceMm`, `facingDeg`, `anchorKey`, `targetUnitId`, or `combatChoice`.
   - `GET /api/games/{id}/actions` returns action history with machine-readable results.
-  - `POST /api/games/{id}/rewind` rewinds to `{ "actionIndex": number }` and deletes later snapshots.
+  - `POST /api/games/{id}/rewind` rewinds to `{ "actionIndex": number }` and deletes later snapshots. Missing snapshots return `400` with `game snapshot not found`.
 - Game mutation and step responses use `APIResponse` where practical: `ok`, `game`, `action`, `roll`, `legalActions`, `legalActionDetails`, `readOnly`, `messages`, and `errors`.
 - Army and catalog responses use the same `ok`, domain object, and `messages` pattern.
 - `battlemapId` defaults to a saved starter map. Game creation resolves the ID through the battlemap store, copies the map definition into the game, and rejects unknown IDs.
@@ -112,7 +112,8 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
 - Unit tests for combat alignment, dice, target numbers, hit allocation, officer-safe casualties, morale, broken cascades, pushback/withdraw/decline, and win completion.
 - Store tests for catalog import, filters, template CRUD, roster CRUD, battlemap CRUD, validation, army-to-game setup conversion, filesystem parent directory creation, and idempotent reopen behavior that preserves user-created rows.
 - Version tests for base/default-branch display, branch suffix derivation, and branch-name sanitization.
-- HTTP tests for catalog endpoints, army endpoints, battlemap endpoints, create game, copied game battlemaps, place units, activate, apply actions including shooting and combat pushback, list actions, persistence, rewind, read-only historical step lookup, and the landing footer version/copyright text.
+- HTTP tests for catalog endpoints, army endpoints, battlemap endpoints, valid and invalid game creation, copied game battlemaps, place units, activate, apply actions including shooting, pivot, about-face, and combat pushback, list actions, persistence, rewind including invalid rewind requests, full multi-unit round progression, read-only historical step lookup, and the landing footer version/copyright text.
+- UI wiring tests ensure Alpine template event handlers reference methods implemented by `web/static/app.js`.
 - Manual browser check: manage templates/rosters/battlemaps, create a game from rosters, place units, zoom/pan/fit the SVG arena, activate with the unit-adjacent `+`, open the move control and click forward/backward movement bars, use shoot controls and target crosses when eligible, reload the saved game and repeat movement, pivot/about-face from battlemap clicks, skip with `~`, enter combat, resolve pushback, rewind, open a saved game URL at the latest step, open an earlier step URL, and verify SVG updates, banner text, left-bar history, URL tracking, read-only historical state, landing footer, and action feedback.
 
 ## Assumptions

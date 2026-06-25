@@ -398,11 +398,12 @@ func (e *Engine) Activate(g *Game, req ActivateRequest) (*ActionRecord, []int, e
 		actions = 1
 	}
 	g.CurrentActivation = &Activation{
-		UnitID:           unit.ID,
-		PlayerID:         unit.PlayerID,
-		Success:          success,
-		ActionsRemaining: actions,
-		Roll:             roll,
+		UnitID:                unit.ID,
+		PlayerID:              unit.PlayerID,
+		Success:               success,
+		LimitedToSimpleAction: success && wasDisordered,
+		ActionsRemaining:      actions,
+		Roll:                  roll,
 	}
 	g.Phase = "activated"
 	messages := []string{fmt.Sprintf("%s rolled %d and %d against activation %d", unit.Name, roll[0], roll[1], target)}
@@ -905,6 +906,9 @@ func legalShootTarget(g *Game, attacker, target Unit, act *Activation) (ShootTar
 	}
 	if !act.Success {
 		return ShootTarget{}, errors.New("failed activations may only take simple actions")
+	}
+	if act.LimitedToSimpleAction {
+		return ShootTarget{}, errors.New("disorder-clearing activations may only take simple actions")
 	}
 	if attacker.Broken || !attacker.Placed || activeMiniCount(attacker) == 0 {
 		return ShootTarget{}, errors.New("shooting unit is no longer on the battlefield")

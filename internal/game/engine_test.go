@@ -1569,6 +1569,38 @@ func TestShootActionRejectsSecondShotInActivation(t *testing.T) {
 	}
 }
 
+func TestShootActionRejectedAfterDisorderClearingActivation(t *testing.T) {
+	engine := NewEngine(7)
+	g := shootingTestGame(t, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 1, Stats: UnitStats{A: 20, D: 8, CD: 1, H: 1}, Equipment: []string{"Bow"}}, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, Stats: UnitStats{A: 11, D: 1, CD: 1, H: 1}})
+	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, LimitedToSimpleAction: true, ActionsRemaining: 1}
+
+	if containsString(LegalActions(g), ActionShoot) {
+		t.Fatalf("shoot should not be legal after clearing disorder, actions=%v", LegalActions(g))
+	}
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionShoot, TargetUnitID: "u2"}); err == nil {
+		t.Fatal("expected shooting after clearing disorder to be rejected")
+	}
+}
+
+func TestActivateMarksDisorderClearingActivationSimpleOnly(t *testing.T) {
+	engine := NewEngine(7)
+	g := shootingTestGame(t, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 1, Stats: UnitStats{A: 20, D: 8, CD: 1, H: 1}, Equipment: []string{"Bow"}}, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, Stats: UnitStats{A: 11, D: 1, CD: 1, H: 1}})
+	g.Phase = "awaiting_activation"
+	g.CurrentActivation = nil
+	g.Units[0].ActivationNumber = 1
+	g.Units[0].Disordered = true
+
+	if _, _, err := engine.Activate(g, ActivateRequest{PlayerID: 1, UnitID: "u1"}); err != nil {
+		t.Fatal(err)
+	}
+	if g.CurrentActivation == nil || !g.CurrentActivation.LimitedToSimpleAction {
+		t.Fatalf("activation = %+v, want limited to simple action", g.CurrentActivation)
+	}
+	if containsString(LegalActions(g), ActionShoot) {
+		t.Fatalf("shoot should not be legal after activation cleared disorder, actions=%v", LegalActions(g))
+	}
+}
+
 func TestShootingShieldingDiceReductionCasualtiesMoraleAndSnapshot(t *testing.T) {
 	engine := NewEngine(3)
 	g := shootingTestGame(t, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, Stats: UnitStats{A: 20, D: 8, CD: 1, H: 1}, Equipment: []string{"Bow"}}, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, MaxHealth: 3, CurrentHealth: 3, CurrentHealthSet: true, Stats: UnitStats{A: 11, D: 1, CD: 1, H: 3}, Special: []string{"Shielding (1)"}})

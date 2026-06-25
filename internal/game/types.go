@@ -303,13 +303,14 @@ type MoraleTestResult struct {
 }
 
 type Activation struct {
-	UnitID           string `json:"unitId"`
-	PlayerID         int    `json:"playerId"`
-	Success          bool   `json:"success"`
-	ActionsRemaining int    `json:"actionsRemaining"`
-	MovesTaken       int    `json:"movesTaken"`
-	ShotsTaken       int    `json:"shotsTaken"`
-	Roll             []int  `json:"roll"`
+	UnitID                string `json:"unitId"`
+	PlayerID              int    `json:"playerId"`
+	Success               bool   `json:"success"`
+	LimitedToSimpleAction bool   `json:"limitedToSimpleAction,omitempty"`
+	ActionsRemaining      int    `json:"actionsRemaining"`
+	MovesTaken            int    `json:"movesTaken"`
+	ShotsTaken            int    `json:"shotsTaken"`
+	Roll                  []int  `json:"roll"`
 }
 
 type ActionRecord struct {

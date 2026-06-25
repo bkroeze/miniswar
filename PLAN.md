@@ -2,19 +2,19 @@
 
 ## Summary
 
-Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game actions, army and roster management, reusable battlemaps, and an SVG arena UI driven by Alpine.js. The current app supports catalog-backed armies, templates, multi-unit setup, activation rolls, alternating activations, movement actions, move-into-combat resolution, morale, pushback choices, action history, rewind, and URL-addressable game steps.
+Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game actions, army and roster management, reusable battlemaps, and an SVG arena UI driven by Alpine.js. The current app supports catalog-backed armies, templates, multi-unit setup, activation rolls, alternating activations, movement and shooting actions, move-into-combat resolution, morale, pushback choices, action history, rewind, and URL-addressable game steps.
 
 ## Key Changes
 
 - `cmd/miniswar` starts the HTTP server with `-addr` and `-db` flags. Local runs default to `miniswar.sqlite`; the production container passes `-db /storage/miniswar.sqlite` for Single Server persistent storage.
 - `internal/version/VERSION` stores the base app version. Local `just` builds and runs pass the current branch through ldflags, Docker builds accept `APP_VERSION`, `APP_BRANCH`, and `APP_DEFAULT_BRANCH`, and branch builds display a sanitized `base-branch` suffix while default-branch builds display the bare base version.
 - `.github/workflows/bump-version.yml` increments the minor decimal base version after merged PRs, skipping the initial `fm/miniswar-version-f9` versioning PR.
-- `internal/game` owns rules, state transitions, layouts, activation, movement, combat, morale, legal actions, and rewind snapshots.
+- `internal/game` owns rules, state transitions, layouts, activation, movement, shooting, combat, morale, legal actions, and rewind snapshots.
 - `internal/store` persists games, snapshots, the imported unit catalog, army templates, and army rosters in SQLite. Ordinary filesystem database paths create missing parent directories before opening; `:memory:` and `file:` SQLite DSNs skip parent directory handling.
 - `web` serves the landing page, management pages, CSS, Alpine.js, and SVG rendering.
 - The store imports `data/units.json` into `catalog_units` and `catalog_unit_terrains` when it opens.
 - The arena is rendered entirely in SVG using millimeter coordinates. Minis are rectangles sized by base dimensions, with unit/player color, facing indicator, mini key, officer marking, status styling, engagement styling, and contextual unit-adjacent controls.
-- During play, the browser uses a top gameplay banner plus SVG controls near the active unit instead of a right-side action form. The active unit's move control opens clickable forward and backward movement bars; feedback and rewindable action history live in the left bar with unit details, and the URL tracks the current game and action step.
+- During play, the browser uses a top gameplay banner plus SVG controls near the active unit instead of a right-side action form. The active unit's move control opens clickable forward and backward movement bars, and eligible shooting units can open server-provided clickable target crosses. Feedback and rewindable action history live in the left bar with unit details, and the URL tracks the current game and action step.
 - Battlemaps are saved in SQLite with dimensions and rectangular terrain zones. The browser includes a battlemap editor, and active games copy the chosen map definition so later library edits do not mutate saved or rewindable game state.
 - Setup can use saved army rosters for either player, or fall back to manual units when no roster is selected.
 - Unit layout uses stable mini keys like `p1-u1-m01`; the officer defaults to one of the center positions in the front rank.
@@ -56,16 +56,16 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
   - `PATCH /api/battlemaps/{id}` updates custom battlemap name, dimensions, and terrain.
   - `DELETE /api/battlemaps/{id}` deletes custom battlemaps. Built-in starter maps are protected from update and delete.
 - Game API:
-  - `POST /api/games` creates a game. The request can provide `player1Units` and `player2Units`, legacy `player1` and `player2`, or `player1ArmyId` and `player2ArmyId` to load roster units. Manual units use `baseWidthMm`, `baseDepthMm`, `count`, optional `name`, optional catalog/army identity fields, optional `stats`, and optional health fields.
+  - `POST /api/games` creates a game. The request can provide `player1Units` and `player2Units`, legacy `player1` and `player2`, or `player1ArmyId` and `player2ArmyId` to load roster units. Manual units use `baseWidthMm`, `baseDepthMm`, `count`, optional `name`, optional catalog/army identity fields, optional `stats`, optional `special`, optional `equipment`, and optional health fields.
   - `GET /api/games` lists saved games.
   - `GET /api/games/{id}` returns full game state.
   - `GET /api/games/{id}/steps/{step}` returns the game state at an action-history step. Step `0` is the initial saved setup state, the current step is writable, and earlier historical steps include `readOnly: true`.
   - `POST /api/games/{id}/placements` places the next setup unit from `{ "playerId": number, "unitId": string, "x": number, "y": number, "facingDeg": number }`.
-  - `POST /api/games/{id}/activate` activates a unit from `{ "playerId": number, "unitId": string }`, rolls `2d10`, records success/failure, may resolve engagement combat, and returns available actions.
-  - `POST /api/games/{id}/actions` applies `move`, `pivot`, `about_face`, `skip`, or `combat_pushback` from an action request with `playerId`, `unitId`, `type`, and type-specific fields such as `direction`, `distanceMm`, `facingDeg`, `anchorKey`, or `combatChoice`.
+  - `POST /api/games/{id}/activate` activates a unit from `{ "playerId": number, "unitId": string }`, rolls `2d10`, records success/failure, may resolve engagement combat, and returns available actions with legal target details when shooting is available.
+  - `POST /api/games/{id}/actions` applies `move`, `pivot`, `about_face`, `shoot`, `skip`, or `combat_pushback` from an action request with `playerId`, `unitId`, `type`, and type-specific fields such as `direction`, `distanceMm`, `facingDeg`, `anchorKey`, `targetUnitId`, or `combatChoice`.
   - `GET /api/games/{id}/actions` returns action history with machine-readable results.
   - `POST /api/games/{id}/rewind` rewinds to `{ "actionIndex": number }` and deletes later snapshots.
-- Game mutation and step responses use `APIResponse` where practical: `ok`, `game`, `action`, `roll`, `legalActions`, `readOnly`, `messages`, and `errors`.
+- Game mutation and step responses use `APIResponse` where practical: `ok`, `game`, `action`, `roll`, `legalActions`, `legalActionDetails`, `readOnly`, `messages`, and `errors`.
 - Army and catalog responses use the same `ok`, domain object, and `messages` pattern.
 - `battlemapId` defaults to a saved starter map. Game creation resolves the ID through the battlemap store, copies the map definition into the game, and rejects unknown IDs.
 - Adding template or roster units with `miniCount` omitted or `0` uses one full rank for that base size, and counts above the base maximum are clamped. Roster `currentHealth` is clamped between `0` and the unit's max health.
@@ -82,7 +82,13 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
   - `move`: straight forward up to movement limit, backward up to half. A second move in the same activation has half movement.
   - `pivot`: rotate unit around the officer by default, or around a selected mini key anchor when supplied.
   - `about_face`: reverse facing and reorganize ranks according to the base layout rules.
+  - `shoot`: attack one legal enemy target with a listed shooting weapon.
   - `skip`: end the activation.
+- `shoot` is legal only for a successful, non-simple activation when the unit has actions remaining, has not already shot this activation, is not in combat, has a listed shooting weapon or matching special ability, and has at least one enemy target in range and line of sight. Units in active combat cannot be shooting targets.
+- Shooting weapons are matched from unit equipment, special abilities, or name. Current ranges are Bow `500mm`, Elf Bow `550mm`, Sling `300mm`, Light Catapult `800mm`, Heavy Catapult `1000mm`, Ballista `750mm`, and Fire Breath `300mm`.
+- Legal shooting target details are returned in `legalActionDetails` as `shoot` targets with weapon, range, range limit, line-of-sight result, and target center for browser or automation targeting.
+- Shooting action results include target unit, weapon, range, line of sight, dice count, target number, modifiers, rolls, hits, casualties, morale tests, broken units, and target removal.
+- Shooting line of sight is traced from the officer base through the attacker's front arc. `Indirect Fire` bypasses line of sight, target `Large` or `Enormous` changes which blockers matter, `Shielding` reduces shooting dice by one with a minimum of one, and terrain cover/obscuring hooks currently return no modifier or blocker until richer terrain data exists.
 - A unit with an `M` stat moves `M * 25mm`; units without stats use `100mm`.
 - Rough terrain doubles movement cost only for the overlapping portion of a move. Impassable terrain blocks placement, movement, pivot, about-face, combat alignment, and pushback/withdraw movement. Path terrain is currently visual only.
 - Unit placement, movement, combat alignment, pushback, and withdrawal use the active battlemap bounds instead of a fixed arena size.
@@ -91,6 +97,7 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
 - Moving into an enemy creates an engagement, snaps the attacker flush to the defender face when possible, accepts a small geometry tolerance for angled contact, and resolves a combat round.
 - Activating a unit already engaged with an enemy also resolves combat before ordinary actions continue.
 - Combat records dice counts, target numbers, modifiers, rolls, hits, casualties, morale tests, broken units, winners, and pending pushback choices.
+- Shooting records dice counts, target numbers, modifiers, rolls, hits, casualties, morale tests caused by shooting, broken units, and removed targets.
 - While a pending combat choice exists, legal actions are limited to `combat_pushback` with one of `pushback_25`, `pushback_75`, `withdraw_25`, or `decline`.
 - Passable-obstacle terrain does not block movement, but it marks a defender as fortified when the attacker crosses or contacts it while moving into combat.
 - Roster health is copied into each mini when a game starts. Units with zero current health start removed, are skipped during placement and activation, and can immediately determine a win or draw after setup.
@@ -101,16 +108,16 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
 ## Test Plan
 
 - Unit tests for base-size validation, max unit size, rank layout, officer placement, mini key stability, and catalog-derived movement/health.
-- Unit tests for activation success/failure, disordered activation, legal action gating, movement limits, and failed-activation simple action limits.
+- Unit tests for activation success/failure, disordered activation, legal action gating, movement limits, shooting eligibility, line of sight, shooting resolution, and failed-activation simple action limits.
 - Unit tests for combat alignment, dice, target numbers, hit allocation, officer-safe casualties, morale, broken cascades, pushback/withdraw/decline, and win completion.
 - Store tests for catalog import, filters, template CRUD, roster CRUD, battlemap CRUD, validation, army-to-game setup conversion, filesystem parent directory creation, and idempotent reopen behavior that preserves user-created rows.
 - Version tests for base/default-branch display, branch suffix derivation, and branch-name sanitization.
-- HTTP tests for catalog endpoints, army endpoints, battlemap endpoints, create game, copied game battlemaps, place units, activate, apply actions, combat pushback, list actions, persistence, rewind, read-only historical step lookup, and the landing footer version/copyright text.
-- Manual browser check: manage templates/rosters/battlemaps, create a game from rosters, place units, zoom/pan/fit the SVG arena, activate with the unit-adjacent `+`, open the move control and click forward/backward movement bars, reload the saved game and repeat movement, pivot/about-face from battlemap clicks, skip with `~`, enter combat, resolve pushback, rewind, open a saved game URL at the latest step, open an earlier step URL, and verify SVG updates, banner text, left-bar history, URL tracking, read-only historical state, landing footer, and action feedback.
+- HTTP tests for catalog endpoints, army endpoints, battlemap endpoints, create game, copied game battlemaps, place units, activate, apply actions including shooting and combat pushback, list actions, persistence, rewind, read-only historical step lookup, and the landing footer version/copyright text.
+- Manual browser check: manage templates/rosters/battlemaps, create a game from rosters, place units, zoom/pan/fit the SVG arena, activate with the unit-adjacent `+`, open the move control and click forward/backward movement bars, use shoot controls and target crosses when eligible, reload the saved game and repeat movement, pivot/about-face from battlemap clicks, skip with `~`, enter combat, resolve pushback, rewind, open a saved game URL at the latest step, open an earlier step URL, and verify SVG updates, banner text, left-bar history, URL tracking, read-only historical state, landing footer, and action feedback.
 
 ## Assumptions
 
 - Use Go 1.26.2 already available in the environment.
 - Use `modernc.org/sqlite` to avoid CGO requirements.
 - Use Alpine.js for the UI, with the app still fully operable through JSON APIs.
-- Shooting, wheel movement, multiplayer sockets, authentication, and special ability execution remain deferred.
+- Wheel movement, multiplayer sockets, authentication, and special ability execution beyond shooting-related hooks remain deferred.

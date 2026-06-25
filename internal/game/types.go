@@ -338,6 +338,7 @@ type APIResponse struct {
 	Action             *ActionRecord `json:"action,omitempty"`
 	Roll               []int         `json:"roll,omitempty"`
 	LegalActions       []string      `json:"legalActions,omitempty"`
+	// LegalActionDetails carries target data for actions that need structured choices, such as shooting.
 	LegalActionDetails []LegalAction `json:"legalActionDetails,omitempty"`
 	// ReadOnly marks historical step responses that clients should not mutate.
 	ReadOnly bool     `json:"readOnly,omitempty"`

@@ -422,6 +422,102 @@ func TestGetGameStepReturnsSnapshotWithoutRewindingCurrentGame(t *testing.T) {
 	}
 }
 
+func TestTenUnitsPerSideCanCompleteRoundAndRewind(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	srv := New(st, game.NewEngine(1)).Routes()
+	createBody := `{"battlemapId":"old_road","player1Units":` + unitSetupsJSON(10) + `,"player2Units":` + unitSetupsJSON(10) + `}`
+	res := request(t, srv, http.MethodPost, "/api/games", createBody)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("create status %d: %s", res.Code, res.Body.String())
+	}
+	var created game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	g := created.Game
+	if len(g.Units) != 20 {
+		t.Fatalf("created %d units, want 20", len(g.Units))
+	}
+
+	for g.Phase == "setup" {
+		unit := firstUnplacedUnitForPlayer(g, g.ActivePlayer)
+		x, y := manyUnitPlacementPoint(unit.PlayerID, unit.ID)
+		facing := 0
+		if unit.PlayerID == 2 {
+			facing = 180
+		}
+		res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/placements", `{"playerId":`+itoa(unit.PlayerID)+`,"unitId":"`+unit.ID+`","x":`+itoa(x)+`,"y":`+itoa(y)+`,"facingDeg":`+itoa(facing)+`}`)
+		if res.Code != http.StatusOK {
+			t.Fatalf("placement for %s status %d: %s", unit.ID, res.Code, res.Body.String())
+		}
+		var placed game.APIResponse
+		if err := json.Unmarshal(res.Body.Bytes(), &placed); err != nil {
+			t.Fatal(err)
+		}
+		g = placed.Game
+	}
+	if g.Phase != "awaiting_activation" || len(g.ActionHistory) != 20 {
+		t.Fatalf("after setup phase=%q actions=%d, want awaiting_activation with 20 placements", g.Phase, len(g.ActionHistory))
+	}
+
+	startingPlayer := g.ActivePlayer
+	var firstActivationIndex int
+	activations := 0
+	for g.Round == 1 {
+		unit, ok := firstUnactivatedUnitForPlayerThisRound(g, g.ActivePlayer)
+		if !ok {
+			t.Fatalf("player %d has no unit to activate in round %d: actions=%d", g.ActivePlayer, g.Round, len(g.ActionHistory))
+		}
+		res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/activate", `{"playerId":`+itoa(g.ActivePlayer)+`,"unitId":"`+unit.ID+`"}`)
+		if res.Code != http.StatusOK {
+			t.Fatalf("activate %s status %d: %s", unit.ID, res.Code, res.Body.String())
+		}
+		var activated game.APIResponse
+		if err := json.Unmarshal(res.Body.Bytes(), &activated); err != nil {
+			t.Fatal(err)
+		}
+		if activations == 0 {
+			firstActivationIndex = activated.Action.Index
+		}
+		if !containsLegalAction(activated.LegalActions, game.ActionSkip) {
+			t.Fatalf("legal actions after activating %s = %v, want skip", unit.ID, activated.LegalActions)
+		}
+		res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/actions", `{"playerId":`+itoa(unit.PlayerID)+`,"unitId":"`+unit.ID+`","type":"skip"}`)
+		if res.Code != http.StatusOK {
+			t.Fatalf("skip %s status %d: %s", unit.ID, res.Code, res.Body.String())
+		}
+		var skipped game.APIResponse
+		if err := json.Unmarshal(res.Body.Bytes(), &skipped); err != nil {
+			t.Fatal(err)
+		}
+		g = skipped.Game
+		activations++
+		if activations > 20 {
+			t.Fatalf("round 1 did not complete after 20 activations: round=%d active=%d actions=%d", g.Round, g.ActivePlayer, len(g.ActionHistory))
+		}
+	}
+	if activations != 20 || g.Round != 2 || g.Phase != "awaiting_activation" || g.ActivePlayer != startingPlayer {
+		t.Fatalf("after round 1 activations=%d round=%d phase=%q active=%d, want 20 round 2 awaiting player %d", activations, g.Round, g.Phase, g.ActivePlayer, startingPlayer)
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/rewind", `{"actionIndex":`+itoa(firstActivationIndex)+`}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("rewind status %d: %s", res.Code, res.Body.String())
+	}
+	var rewound game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &rewound); err != nil {
+		t.Fatal(err)
+	}
+	if rewound.Game.Round != 1 || rewound.Game.Phase != "awaiting_activation" || len(rewound.Game.ActionHistory) != 20 || rewound.Game.CurrentActivation != nil {
+		t.Fatalf("rewound game round=%d phase=%q actions=%d activation=%#v, want post-setup state", rewound.Game.Round, rewound.Game.Phase, len(rewound.Game.ActionHistory), rewound.Game.CurrentActivation)
+	}
+}
+
 func TestBattlemapHTTPCRUDAndValidation(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
 	if err != nil {
@@ -954,6 +1050,14 @@ func containsLegalAction(actions []string, want string) bool {
 	return false
 }
 
+func unitSetupsJSON(count int) string {
+	setups := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		setups = append(setups, `{"baseWidthMm":25,"baseDepthMm":25,"count":1}`)
+	}
+	return `[` + strings.Join(setups, ",") + `]`
+}
+
 func firstUnplacedUnitForPlayer(g *game.Game, playerID int) game.Unit {
 	for _, unit := range g.Units {
 		if unit.PlayerID == playerID && !unit.Placed {
@@ -963,9 +1067,43 @@ func firstUnplacedUnitForPlayer(g *game.Game, playerID int) game.Unit {
 	return game.Unit{}
 }
 
+func firstUnactivatedUnitForPlayerThisRound(g *game.Game, playerID int) (game.Unit, bool) {
+	activated := map[string]bool{}
+	for _, rec := range g.ActionHistory {
+		if rec.Round == g.Round && rec.Type == game.ActionActivate {
+			activated[rec.UnitID] = true
+		}
+	}
+	for _, unit := range g.Units {
+		if unit.PlayerID == playerID && unit.Placed && !unit.Broken && !activated[unit.ID] {
+			return unit, true
+		}
+	}
+	return game.Unit{}, false
+}
+
 func placementPoint(playerID int) (int, int) {
 	if playerID == 1 {
 		return 120, 120
 	}
 	return 620, 400
+}
+
+func manyUnitPlacementPoint(playerID int, unitID string) (int, int) {
+	index := 0
+	parts := strings.Split(unitID, "-u")
+	if len(parts) == 2 {
+		if parsed, err := strconv.Atoi(parts[1]); err == nil {
+			index = parsed - 1
+		}
+	}
+	if unitID == "u1" || unitID == "u2" {
+		index = 0
+	}
+	col := index % 5
+	row := index / 5
+	if playerID == 1 {
+		return 90 + col*55, 95 + row*55
+	}
+	return 500 + col*55, 330 + row*55
 }

@@ -572,9 +572,11 @@ func TestMoveIntoCombatAcrossPassableObstacleAddsFortificationModifier(t *testin
 func TestCombatChoicePushbackMovesLoserAndClosesEngagement(t *testing.T) {
 	engine := NewEngine(37)
 	g := combatChoiceGame()
+	g.Units[0].Y = 275
+	g.Units[1].Y = 250
 	loserBeforeY := g.Units[1].Y
 
-	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback25})
+	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -585,11 +587,11 @@ func TestCombatChoicePushbackMovesLoserAndClosesEngagement(t *testing.T) {
 	if g.Engagements[0].Active {
 		t.Fatalf("resolved choice should close engagement: %+v", g.Engagements[0])
 	}
-	if got := mathRound(g.Units[1].Y - loserBeforeY); got != -25 {
-		t.Fatalf("loser moved %.0fmm, want -25mm", got)
+	if got := mathRound(g.Units[1].Y - loserBeforeY); got != -150 {
+		t.Fatalf("loser moved %.0fmm, want -150mm", got)
 	}
 	choiceResult := rec.Result.(map[string]any)["combatChoice"].(CombatChoiceResult)
-	if choiceResult.MovingUnitID != "u2" || choiceResult.RequestedDistanceMM != 25 || choiceResult.MovedDistanceMM != 25 || choiceResult.StoppedBy != "completed" {
+	if choiceResult.MovingUnitID != "u2" || choiceResult.RequestedDistanceMM != 150 || choiceResult.MovedDistanceMM != 150 || choiceResult.StoppedBy != "completed" {
 		t.Fatalf("structured choice result missing movement detail: %+v", choiceResult)
 	}
 }
@@ -600,7 +602,7 @@ func TestCombatChoiceMovementStopsAtBattlemapEdge(t *testing.T) {
 	g.Battlemap = Battlemap{ID: "small", Name: "Small", WidthMM: 760, HeightMM: 520}
 	g.Units[1].Y = 10
 
-	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback25})
+	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -633,17 +635,132 @@ func TestCombatChoiceWithdrawMovesWinnerAndRejectsWrongUnit(t *testing.T) {
 func TestDefenderWonPushbackMovesLosingAttackerAwayFromDefender(t *testing.T) {
 	engine := NewEngine(39)
 	g := combatChoiceGame()
+	g.Units[0].Y = 275
+	g.Units[1].Y = 250
 	g.PendingCombatChoice.WinningPlayerID = 2
 	g.PendingCombatChoice.WinningUnitID = "u2"
 	g.PendingCombatChoice.WinningIsAttacker = false
 	g.PendingCombatChoice.LosingUnitID = "u1"
 	attackerBeforeY := g.Units[0].Y
 
-	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 2, UnitID: "u2", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback25}); err != nil {
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 2, UnitID: "u2", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150}); err != nil {
 		t.Fatal(err)
 	}
-	if got := mathRound(g.Units[0].Y - attackerBeforeY); got != 25 {
-		t.Fatalf("losing attacker moved %.0fmm, want 25mm away from defender", got)
+	if got := mathRound(g.Units[0].Y - attackerBeforeY); got != -150 {
+		t.Fatalf("losing attacker moved %.0fmm, want -150mm in defender facing direction", got)
+	}
+}
+
+func TestCombatChoicePushbackChainsContactedUnit(t *testing.T) {
+	engine := NewEngine(40)
+	g := combatChoiceGame()
+	g.Units[0].Y = 275
+	g.Units[1].Y = 250
+	chain := formationUnit("u3", 2, 100, 100, 0, 1)
+	g.Units = append(g.Units, chain)
+
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := mathRound(g.Units[1].Y); got != 100 {
+		t.Fatalf("loser y = %.0f, want 100", got)
+	}
+	if got := mathRound(g.Units[2].Y); got != 50 {
+		t.Fatalf("contacted unit y = %.0f, want 50 to keep 25mm clearance", got)
+	}
+	if distance := mathRound(unitDistance(g.Units[1], g.Units[2])); distance != 25 {
+		t.Fatalf("chain clearance = %.0fmm, want 25mm", distance)
+	}
+}
+
+func TestCombatChoicePushbackRechecksPreviouslyProcessedChainedUnit(t *testing.T) {
+	engine := NewEngine(40)
+	g := combatChoiceGame()
+	g.Units[0].X = 50
+	g.Units[0].Y = 100
+	g.Units[0].FacingDeg = 90
+	g.Units[1].X = 75
+	g.Units[1].Y = 100
+	g.PendingCombatChoice.AxisDX = 1
+	g.PendingCombatChoice.AxisDY = 0
+	g.PendingCombatChoice.WinningIsAttacker = true
+
+	alreadyProcessed := formationUnit("u3", 2, 149, 100, 90, 1)
+	secondContact := formationUnit("u4", 2, 125, 100, 90, 1)
+	downstream := formationUnit("u5", 2, 198, 100, 90, 1)
+	g.Units = append(g.Units, alreadyProcessed, secondContact, downstream)
+
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionCombatPushback, CombatChoice: CombatChoicePushback150}); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := range g.Units {
+		for j := i + 1; j < len(g.Units); j++ {
+			if g.Units[i].ID == "u1" || g.Units[j].ID == "u1" {
+				continue
+			}
+			if distance := mathRound(unitDistance(g.Units[i], g.Units[j])); distance < 25 {
+				t.Fatalf("%s and %s clearance = %.0fmm, want at least 25mm", g.Units[i].ID, g.Units[j].ID, distance)
+			}
+		}
+	}
+}
+
+func TestTiedFrontToFrontCombatAutomaticallyPushesBothUnits(t *testing.T) {
+	engine := NewEngine(41)
+	attacker := formationUnit("u1", 1, 100, 100, 0, 1)
+	defender := formationUnit("u2", 2, 100, 75, 180, 1)
+	attacker.Stats = UnitStats{A: 1, D: 100, CD: 1, H: 20}
+	defender.Stats = UnitStats{A: 1, D: 100, CD: 1, H: 20}
+	setMiniHealth(&attacker, 20)
+	setMiniHealth(&defender, 20)
+	engagement := CombatEngagement{ID: "front", AttackerUnitID: "u1", DefenderUnitID: "u2", DefenderFace: CombatFaceFront, AxisDX: 0, AxisDY: -1, Active: true}
+	g := &Game{Round: 1, Phase: "activated", RandomSeed: 41, Battlemap: Battlemaps()[0], Units: []Unit{attacker, defender}, Engagements: []CombatEngagement{engagement}}
+	distanceBefore := unitDistance(attacker, defender)
+
+	result := engine.resolveCombatRound(g, engagement, 0, "u1", nil)
+
+	if result.WinnerUnitID != "" || result.PendingChoice != nil || g.PendingCombatChoice != nil {
+		t.Fatalf("tied combat should not create winner choice: result=%+v pending=%+v", result, g.PendingCombatChoice)
+	}
+	if len(result.TiePushback) != 2 || g.Engagements[0].Active {
+		t.Fatalf("tie pushback should move both units and close combat: result=%+v engagement=%+v", result.TiePushback, g.Engagements[0])
+	}
+	for _, pushback := range result.TiePushback {
+		if got := mathRound(pushback.MovedDistanceMM); got != 25 {
+			t.Fatalf("%s tie pushback moved %.0fmm, want 25mm", pushback.MovingUnitID, got)
+		}
+	}
+	if distanceAfter := unitDistance(g.Units[0], g.Units[1]); distanceAfter <= distanceBefore {
+		t.Fatalf("tie pushback did not increase separation: before %.2f after %.2f", distanceBefore, distanceAfter)
+	}
+}
+
+func TestTiedFlankCombatAutomaticallyPushesBothUnits(t *testing.T) {
+	engine := NewEngine(42)
+	attacker := formationUnit("u1", 1, 75, 100, 90, 1)
+	defender := formationUnit("u2", 2, 100, 100, 0, 1)
+	attacker.Stats = UnitStats{A: 1, D: 100, CD: 1, H: 20}
+	defender.Stats = UnitStats{A: 1, D: 100, CD: 1, H: 20}
+	setMiniHealth(&attacker, 20)
+	setMiniHealth(&defender, 20)
+	engagement := CombatEngagement{ID: "flank", AttackerUnitID: "u1", DefenderUnitID: "u2", DefenderFace: CombatFaceLeft, AxisDX: 1, AxisDY: 0, Active: true}
+	g := &Game{Round: 1, Phase: "activated", RandomSeed: 42, Battlemap: Battlemaps()[0], Units: []Unit{attacker, defender}, Engagements: []CombatEngagement{engagement}}
+	distanceBefore := unitDistance(attacker, defender)
+
+	result := engine.resolveCombatRound(g, engagement, 0, "u1", nil)
+
+	if len(result.TiePushback) != 2 || result.PendingChoice != nil || g.PendingCombatChoice != nil {
+		t.Fatalf("flank tie should automatically push both units: result=%+v pending=%+v", result, g.PendingCombatChoice)
+	}
+	for _, pushback := range result.TiePushback {
+		if got := mathRound(pushback.MovedDistanceMM); got != 25 {
+			t.Fatalf("%s flank tie pushback moved %.0fmm, want 25mm", pushback.MovingUnitID, got)
+		}
+	}
+	if distanceAfter := unitDistance(g.Units[0], g.Units[1]); distanceAfter <= distanceBefore {
+		t.Fatalf("flank tie pushback did not increase separation: before %.2f after %.2f", distanceBefore, distanceAfter)
 	}
 }
 

@@ -53,9 +53,10 @@ Before this work, the engine treated enemy units as blocking movement obstacles 
 
 **Pushback and Choice State**
 
-- R19. After a combat round, the winner must be offered the options to push the opposing unit by `25mm`, push it by `75mm`, withdraw itself by `25mm`, or decline.
-- R20. Pushback and withdraw movement must stay on the original attacker movement axis and automatically stop at obstacles or the arena edge.
+- R19. After a combat round where both units remain, the side that delivered more hits must be offered the options to push the opposing unit by `150mm` in the winner's facing direction, withdraw itself by `25mm` backward, or decline.
+- R20. Pushback and withdraw movement must stop before impassable terrain or the arena edge, ignore rough-ground movement penalties, and chain contacted units far enough to keep at least `25mm` clearance.
 - R21. Because pushback is a player choice, the engine must expose it as an explicit pending choice and an explicit API action before normal play continues.
+- R21a. If both sides delivered the same number of hits, both combat units must automatically push back `25mm` directly away from each other and no pending choice is created.
 
 **Automation, Persistence, and UI**
 
@@ -95,13 +96,16 @@ flowchart TB
   I -->|yes| J[Roll morale and cascade broken tests]
   I -->|no| K[Determine winner]
   J --> K
-  K --> L{Winner exists and units remain?}
-  L -->|yes| M[Create pending pushback choice]
+  K --> L{Units remain?}
   L -->|no| N[Close or update engagement]
+  L -->|yes| S{Hit winner?}
+  S -->|winner| M[Create pending pushback choice]
+  S -->|tie| T[Auto push both units 25mm apart]
   M --> O[Return API response; block normal actions]
-  N --> P[Persist and return API response]
+  T --> P[Persist and return API response]
+  N --> P
   O --> Q[combat_pushback action]
-  Q --> R[Move selected unit on combat axis and persist]
+  Q --> R[Move selected unit on winner-facing axis and persist]
 ```
 
 The combat resolver should return a structured `CombatRoundResult` that can be embedded in `ActionRecord.Result`. It should include per-side dice counts, target numbers, modifiers, rolls, hits, casualties, morale tests, broken removals, engagement updates, and pending choices. Messages should summarize the same data for human readers.
@@ -115,7 +119,7 @@ The implemented state uses these concepts in `internal/game/types.go`:
 - `Mini.HealthRemaining` and `Mini.Removed`.
 - Explicit unit status fields: `Disordered bool` and `Broken bool`.
 - `CombatEngagement` with ID, attacker unit ID, defender unit ID, defender face, original movement axis, active flag, created round, and created action index.
-- `CombatRoundResult` for action history results, including side-specific rolls and modifiers.
+- `CombatRoundResult` for action history results, including side-specific rolls, modifiers, and tied-combat pushback results.
 - `PendingCombatChoice` with engagement ID, winning player, winning unit, losing unit, legal choices, movement axis, and source action index.
 - `Game.RandomRollIndex` as the snapshot-restorable random cursor.
 
@@ -235,11 +239,13 @@ Existing games without these fields should unmarshal as healthy, not engaged, no
 - **Goal:** Implement the player-choice movement after combat and the passable-obstacle hook needed by combat modifiers.
 - **Files:** `internal/game/types.go`, `internal/game/engine.go`, `internal/game/engine_test.go`, `internal/server/server.go`, `web/static/app.js`.
 - **Patterns:** Reuse stepwise movement stopping logic for terrain and arena edge. Add terrain type constants near existing terrain constants.
-- **Design Notes:** Add `ActionCombatPushback` or an equivalent action request type with choices for `pushback_25`, `pushback_75`, `withdraw_25`, and `decline`. Movement follows the original combat axis and stops at obstacles or the arena edge. Add passable-obstacle terrain type now, even if no default battlemap uses it yet, so the fortification modifier has a real hook.
+- **Design Notes:** Add `ActionCombatPushback` or an equivalent action request type with choices for `pushback_150`, `withdraw_25`, and `decline`. Pushback uses the winner's facing direction, withdraw moves backward on that axis, both stop at impassable terrain or the arena edge, and pushback chains contacted units to maintain `25mm` clearance. Add passable-obstacle terrain type now, even if no default battlemap uses it yet, so the fortification modifier has a real hook.
 - **Test Scenarios:**
   - `internal/game/engine_test.go`: combat winner receives exactly the legal pushback/withdraw/decline choices.
-  - `internal/game/engine_test.go`: pushback by 25mm and 75mm moves the losing unit along the combat axis and stops at obstacles.
+  - `internal/game/engine_test.go`: pushback by 150mm moves the losing unit in the winner's facing direction and stops at obstacles.
   - `internal/game/engine_test.go`: withdraw by 25mm moves the winning unit backward on the same axis.
+  - `internal/game/engine_test.go`: tied combat automatically pushes both combat units 25mm directly away from each other.
+  - `internal/game/engine_test.go`: pushback chains contacted units far enough to maintain 25mm clearance.
   - `internal/game/engine_test.go`: decline clears the pending choice without moving units.
   - `internal/game/engine_test.go`: fortification hook adds the modifier when movement into combat crosses or contacts a passable obstacle.
 - **Verification:** `go test ./internal/game`.
@@ -297,7 +303,13 @@ Existing games without these fields should unmarshal as healthy, not engaged, no
   - **Covers:** R19, R20, R21
   - **Given:** Combat produces a winner and both units remain on the battlefield.
   - **When:** The action response is returned.
-  - **Then:** The game exposes only the legal pending pushback choices until the winner submits pushback, withdraw, or decline.
+  - **Then:** The game exposes only the legal pending pushback choices until the winner submits `pushback_150`, `withdraw_25`, or `decline`.
+
+- AE4a. **Tied Combat Pushback**
+  - **Covers:** R21a
+  - **Given:** Combat hits are tied and both units remain on the battlefield.
+  - **When:** The combat round resolves.
+  - **Then:** The action result records tied pushback for both units and no pending combat choice is created.
 
 - AE5. **Rewind Combat**
   - **Covers:** R23

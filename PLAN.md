@@ -96,9 +96,10 @@ Miniswar is a Go web app with SQLite-backed game state, JSON APIs for all game a
 - Units may pass through friendly units only if the move fully clears them; otherwise movement backs up to the last clear position. Enemy contact during forward or backward movement triggers combat.
 - Moving into an enemy creates an engagement, snaps the attacker flush to the defender face when possible, accepts a small geometry tolerance for angled contact, and resolves a combat round.
 - Activating a unit already engaged with an enemy also resolves combat before ordinary actions continue.
-- Combat records dice counts, target numbers, modifiers, rolls, hits, casualties, morale tests, broken units, winners, and pending pushback choices.
+- Combat records dice counts, target numbers, modifiers, rolls, hits, casualties, morale tests, broken units, winners, pending pushback choices, and automatic tied-combat pushback.
 - Shooting records dice counts, target numbers, modifiers, rolls, hits, casualties, morale tests caused by shooting, broken units, and removed targets.
-- While a pending combat choice exists, legal actions are limited to `combat_pushback` with one of `pushback_25`, `pushback_75`, `withdraw_25`, or `decline`.
+- While a pending combat choice exists, legal actions are limited to `combat_pushback` with one of `pushback_150`, `withdraw_25`, or `decline`.
+- A combat winner may push the losing unit 150mm in the winner's facing direction, withdraw its own unit 25mm backward, or decline; tied combat automatically pushes both units 25mm directly away from each other. Pushback and withdrawal stop before impassable terrain or the battlemap edge, ignore rough terrain, and push contacted units far enough to maintain 25mm clearance.
 - Passable-obstacle terrain does not block movement, but it marks a defender as fortified when the attacker crosses or contacts it while moving into combat.
 - Roster health is copied into each mini when a game starts. Units with zero current health start removed, are skipped during placement and activation, and can immediately determine a win or draw after setup.
 - When only one player has units left on the battlefield, that player wins and the game phase becomes `complete`. If no player has active units left, the game completes as a draw.

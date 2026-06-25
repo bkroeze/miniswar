@@ -55,7 +55,7 @@ When activated, unless special rules apply, each unit gets 2 actions.  They can 
 - About Face - which reorganizes the back line with a full line and moves the officer
 - Skip - end the current activation's remaining actions
 
-Wheel, shoot, and special abilities are planned rules, but are not currently available actions.
+Special abilities are planned rules, but are not currently available actions.
 
 A unit that fails its activation roll may only take one *simple* action during its activation: move, pivot, about face, or skip.
 
@@ -156,3 +156,242 @@ When only one player has units left on the battlefield, that player wins. If no 
 - Receive the penalties above
 - Have a +1 on their activation values
 - when they successfully activate, they remove the disordered status, but can only take a simple action that first round they have reactivated.
+
+# Line of Sight — Pseudo-code Version
+
+```pseudo
+function hasLineOfSight(attackingUnit, defendingUnit, desiredFacing):
+    # Line of sight is always checked from the attacking unit's officer.
+    officerBase = attackingUnit.officer.base
+
+    # The line must remain inside the attacking unit's front arc.
+    frontArc = attackingUnit.frontArc
+
+    # Other figures in the officer's own unit do not block line of sight.
+    ignoredBlockers = attackingUnit.figures
+
+    if defendingUnit.figureCount == 1:
+        return canSeeSingleFigure(
+            officerBase,
+            defendingUnit.figures[0],
+            frontArc,
+            ignoredBlockers
+        )
+
+    else:
+        return canSeeMultiFigureUnit(
+            officerBase,
+            defendingUnit,
+            desiredFacing,
+            frontArc,
+            ignoredBlockers
+        )
+```
+
+```pseudo
+function canSeeSingleFigure(officerBase, targetFigure, frontArc, ignoredBlockers):
+    # The attacker may draw from any point on the officer's base
+    # to any point on the target figure's base.
+
+    for each pointA on officerBase:
+        for each pointB on targetFigure.base:
+            line = drawLine(pointA, pointB)
+
+            if line is inside frontArc
+               and line is not blocked by units or blocking terrain,
+                   excluding ignoredBlockers:
+                return true
+
+    return false
+```
+
+```pseudo
+function canSeeMultiFigureUnit(officerBase, defendingUnit, desiredFacing, frontArc, ignoredBlockers):
+    # For a multi-figure unit, the attacker must see at least half
+    # the figures in one facing of the target unit, rounded up.
+
+    facingFigures = defendingUnit.getFiguresInFacing(desiredFacing)
+
+    requiredVisibleFigures = ceiling(count(facingFigures) / 2)
+
+    visibleFigures = 0
+
+    for each figure in facingFigures:
+        if canSeeFigureInFacing(
+            officerBase,
+            figure,
+            desiredFacing,
+            frontArc,
+            ignoredBlockers
+        ):
+            visibleFigures += 1
+
+    if visibleFigures >= requiredVisibleFigures:
+        return true
+    else:
+        return false
+```
+
+```pseudo
+function canSeeFigureInFacing(officerBase, targetFigure, desiredFacing, frontArc, ignoredBlockers):
+    # A unit may only claim line of sight to a flank
+    # if the officer can actually see the flank of a figure.
+
+    visibleArea = targetFigure.getBaseAreaForFacing(desiredFacing)
+
+    for each pointA on officerBase:
+        for each pointB on visibleArea:
+            line = drawLine(pointA, pointB)
+
+            if line is inside frontArc
+               and line is not blocked by units or blocking terrain,
+                   excluding ignoredBlockers:
+                return true
+
+    return false
+```
+
+```pseudo
+function isLineBlocked(line, attackingUnit, defendingUnit):
+    for each terrainFeature crossed by line:
+        # Terrain only blocks line of sight if it completely obscures
+        # the relevant target figure or figures.
+        if terrainFeature.completelyObscuresTarget(line, defendingUnit):
+            return true
+
+    for each unit crossed by line:
+        if unit belongs to attackingUnit:
+            # Figures in the officer's own unit do not block line of sight.
+            continue
+
+        if unit.blocksLineOfSightTo(defendingUnit):
+            return true
+
+    return false
+```
+
+```pseudo
+function blocksLineOfSightTo(blockingUnit, targetUnit):
+    # Normal units do not block line of sight to Large or Enormous units
+    # unless they have the matching special ability.
+
+    if targetUnit.hasAbility("Enormous"):
+        return blockingUnit.hasAbility("Enormous")
+
+    if targetUnit.hasAbility("Large"):
+        return blockingUnit.hasAbility("Large")
+
+    # For ordinary-sized targets, other units may block normally,
+    # depending on the game's normal obstruction rules.
+    return true
+```
+
+# Example
+
+```pseudo
+# Defending unit: 10 dwarf warriors
+# Front rank has 5 figures
+# Rear rank has 5 figures
+# Left flank has 2 figures
+# Right flank has 2 figures
+
+requiredFrontVisible = ceiling(5 / 2) = 3
+requiredRearVisible  = ceiling(5 / 2) = 3
+requiredLeftVisible  = ceiling(2 / 2) = 1
+requiredRightVisible = ceiling(2 / 2) = 1
+
+# Therefore:
+# To see the front or rear, the attacker must see at least 3 dwarves.
+# To see the left or right flank, the attacker must see at least 1 dwarf.
+```
+
+# Flowchart
+
+```mermaid
+flowchart TD
+    A[Start: Check line of sight] --> B[Use attacking unit's officer as the viewpoint]
+
+    B --> C{Is the defending unit a unit-of-one?}
+
+    C -- Yes --> D[Try to draw a line from any point on officer base to any point on target base]
+    D --> E{Line stays inside attacker's front arc?}
+    E -- No --> Z[No line of sight]
+    E -- Yes --> F{Line crosses blocking units or blocking terrain?}
+    F -- No --> Y[Line of sight exists]
+    F -- Yes --> Z
+
+    C -- No --> G[Choose the defending unit facing being checked: front, rear, left flank, or right flank]
+    G --> H[Count figures in that facing]
+    H --> I[Required visible figures = half of facing figures, rounded up]
+
+    I --> J[For each figure in that facing, try to draw a valid line from officer base to that figure's base]
+    J --> K{Is the desired facing a flank?}
+
+    K -- Yes --> L[Line must reach the flank side of a figure]
+    K -- No --> M[Line may reach the relevant visible base area]
+
+    L --> N{Line stays inside attacker's front arc and is not blocked?}
+    M --> N
+
+    N -- Yes --> O[Count that figure as visible]
+    N -- No --> P[Do not count that figure]
+
+    O --> Q{Have enough figures been seen?}
+    P --> Q
+
+    Q -- Yes --> Y[Line of sight exists]
+    Q -- No, more figures remain --> J
+    Q -- No, no figures remain --> Z[No line of sight]
+
+    subgraph Blocking Rules
+        R[Terrain blocks only if it completely obscures the relevant target figures]
+        S[Figures in the officer's own unit never block the officer's line of sight]
+        T[Large units block line of sight to or from Large units only]
+        U[Enormous units block line of sight to or from Enormous units only]
+    end
+```
+
+## Shooting
+
+A unit may use an action to shoot at an enemy unit, no unit without a special ability overriding this rule may shoot twice in the same activation.
+
+Only units with a weapon on the list below may shoot, and their range is limited by the weapon they bear.
+
+Units must have line-of-sight on the target unit, unless they have "Indirect Fire" special ability.
+
+### Weapon Range Table
+
+| Weapon | Range (multiples of 25mm) |
+|-------|-------|
+| Bow | 20 |
+| Elf Bow | 22 |
+| Sling | 12 |
+| Light Catapult | 32 |
+| Heavy Catapult | 40 |
+| Ballista | 30 |
+| Fire Breath | 12 |
+
+Combat dice are determined as in a close combat role, multiplying the CD of the unit by the number of figures in the front rank.
+If the enemy unit has the special ability "shielding" subtract one from the combat dice roll, to a minimum of 1.
+
+### Shooting modifiers table
+
+| Situation | Modifier |
+|-----------|----------|
+| Full ranks in unit | -1 for each after the first rank |
+| This is the second action of an activation | +1 |
+| Unit is Disordered | +1 |
+| Target in Light Cover (bushes, trees, low walls) | +1 |
+| Target in Heavy Cover (purpose built fortifications such as castle walls) | +2 |
+
+### Cover
+
+Cover is any kind of terrain feature that partially blocks line of sight and protects a unit.  A unit must be standing behind cover relative to the attacker to be considered in cover.
+
+### Hits for shooting
+
+Applied with the same modifiers as close combat, with high rolls adding hits.
+
+### Casualties
+
+Applied as with close combat, no retaliation.  Any casualties require a morale test as a result of the attack.

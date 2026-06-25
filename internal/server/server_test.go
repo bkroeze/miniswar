@@ -275,6 +275,95 @@ func TestCombatHTTPFlowPersistsPendingChoiceAndRewinds(t *testing.T) {
 	}
 }
 
+func TestHTTPCombatCanCompleteGameAndRewind(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	engine := game.NewEngine(43)
+	g, err := engine.NewGame(game.Setup{
+		Player1Units: []game.UnitSetup{{BaseWidthMM: 25, BaseDepthMM: 25, Count: 1, Stats: game.UnitStats{A: 1, D: 1, CD: 1, H: 1}}},
+		Player2Units: []game.UnitSetup{{BaseWidthMM: 25, BaseDepthMM: 25, Count: 1, Stats: game.UnitStats{A: 20, D: 20, CD: 1, H: 20}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Phase = "awaiting_activation"
+	g.ActivePlayer = 1
+	g.FirstPlayer = 1
+	g.Units[0].Placed = true
+	g.Units[0].X = 100
+	g.Units[0].Y = 100
+	g.Units[0].FacingDeg = 0
+	g.Units[1].Placed = true
+	g.Units[1].X = 100
+	g.Units[1].Y = 50
+	g.Units[1].FacingDeg = 0
+	snap, err := game.Snapshot(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveGame(g); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveSnapshot(g.ID, -1, snap); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(st, engine).Routes()
+	res := request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/activate", `{"playerId":1,"unitId":"u1"}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("activate status %d: %s", res.Code, res.Body.String())
+	}
+	var activated game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &activated); err != nil {
+		t.Fatal(err)
+	}
+	if !containsLegalAction(activated.LegalActions, game.ActionMove) {
+		t.Fatalf("legal actions after activate = %v, want move", activated.LegalActions)
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/actions", `{"playerId":1,"unitId":"u1","type":"move","direction":"forward","distanceMm":25}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("combat move status %d: %s", res.Code, res.Body.String())
+	}
+	var completed game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &completed); err != nil {
+		t.Fatal(err)
+	}
+	if completed.Game.Phase != "complete" || completed.Game.WinnerPlayerID != 2 {
+		t.Fatalf("combat should complete with player 2 win: phase=%q winner=%d", completed.Game.Phase, completed.Game.WinnerPlayerID)
+	}
+	if len(completed.LegalActions) != 0 || len(completed.LegalActionDetails) != 0 {
+		t.Fatalf("complete game legal actions = %v details=%v, want none", completed.LegalActions, completed.LegalActionDetails)
+	}
+	if unitByID(completed.Game, "u1").Placed || !unitByID(completed.Game, "u1").Broken {
+		t.Fatalf("losing unit should be removed from the battlefield: %#v", unitByID(completed.Game, "u1"))
+	}
+	if !strings.Contains(strings.Join(completed.Messages, "\n"), "Player 2 wins.") {
+		t.Fatalf("completion response missing winner message: %v", completed.Messages)
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/actions", `{"playerId":1,"unitId":"u1","type":"skip"}`)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("post-completion action status %d: %s", res.Code, res.Body.String())
+	}
+
+	res = request(t, srv, http.MethodPost, "/api/games/"+g.ID+"/rewind", `{"actionIndex":`+itoa(completed.Action.Index)+`}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("rewind completed action status %d: %s", res.Code, res.Body.String())
+	}
+	var rewound game.APIResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &rewound); err != nil {
+		t.Fatal(err)
+	}
+	if rewound.Game.Phase == "complete" || rewound.Game.WinnerPlayerID != 0 || unitByID(rewound.Game, "u1").Broken {
+		t.Fatalf("rewind should restore the pre-completion activation state: phase=%q winner=%d unit=%#v", rewound.Game.Phase, rewound.Game.WinnerPlayerID, unitByID(rewound.Game, "u1"))
+	}
+}
+
 func TestListGamesReturnsSummaries(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.sqlite"))
 	if err != nil {

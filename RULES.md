@@ -121,7 +121,7 @@ If a unit loses figures, it must make a "Morale Test".
 
 #### Pushback
 
-If a combat round ends without either unit being entirely removed, compare total hits delivered. The side that delivered more hits may push the losing unit 150mm in the winner's facing direction, withdraw its own unit 25mm back along that same axis, or decline. Pushback and withdrawal stop before the table edge or impassable terrain, ignore rough-ground movement penalties, and chain through contacted units so each contacted unit moves back far enough to keep at least 25mm clearance. If hits are tied, both combat units automatically push back 25mm directly away from each other.
+If a combat round ends without either unit being entirely removed, compare total hits delivered. The side that delivered more hits may push the losing unit up to 150mm in the winner's facing direction, withdraw its own unit 25mm back along that same axis, or decline. The pushed distance is selected along the 150mm pushback control. Pushback and withdrawal stop before the table edge or impassable terrain, ignore rough-ground movement penalties, and chain through contacted units so each contacted unit moves back far enough to keep at least 25mm clearance. If hits are tied, both combat units automatically push back 25mm directly away from each other.
 
 ### Morale Tests
 

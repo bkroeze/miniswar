@@ -571,8 +571,12 @@ func (e *Engine) applyCombatChoice(g *Game, req ActionRequest) (*ActionRecord, e
 	result := map[string]any{"choice": req.CombatChoice, "pendingChoice": choice}
 	switch req.CombatChoice {
 	case CombatChoicePushback150:
+		distance, err := combatPushbackDistance(req)
+		if err != nil {
+			return nil, err
+		}
 		dx, dy := pushbackVector(g, choice)
-		choiceResult := moveCombatChoiceUnit(g, choice.LosingUnitID, dx, dy, 150, choice.WinningUnitID)
+		choiceResult := moveCombatChoiceUnit(g, choice.LosingUnitID, dx, dy, distance, choice.WinningUnitID)
 		choiceResult.Choice = req.CombatChoice
 		result["combatChoice"] = choiceResult
 		result["distanceMovedMm"] = choiceResult.MovedDistanceMM
@@ -606,6 +610,13 @@ func (e *Engine) applyCombatChoice(g *Game, req ActionRequest) (*ActionRecord, e
 	}
 	rec := g.appendRecord(ActionCombatPushback, req.PlayerID, choice.WinningUnitID, req, result, messages)
 	return &rec, nil
+}
+
+func combatPushbackDistance(req ActionRequest) (float64, error) {
+	if req.DistanceMM <= 0 || req.DistanceMM > 150 {
+		return 0, errors.New("pushback distance must be greater than 0 and no more than 150mm")
+	}
+	return req.DistanceMM, nil
 }
 
 func moveCombatChoiceUnit(g *Game, unitID string, dx, dy, distance float64, ignoredUnitIDs ...string) CombatChoiceResult {

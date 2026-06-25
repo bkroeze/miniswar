@@ -443,6 +443,8 @@ func (s *Store) ArmyUnitSetups(armyID string, playerID int) ([]game.UnitSetup, e
 				A: au.CatalogUnit.A, M: au.CatalogUnit.M, F: au.CatalogUnit.F, S: au.CatalogUnit.S,
 				D: au.CatalogUnit.D, CD: au.CatalogUnit.CD, H: au.CatalogUnit.H, Pts: au.CatalogUnit.Pts,
 			},
+			Special:   au.CatalogUnit.Special,
+			Equipment: au.CatalogUnit.Equipment,
 		})
 	}
 	return out, nil

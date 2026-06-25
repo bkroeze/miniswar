@@ -895,6 +895,44 @@ func TestMoraleCascadeSkipsUnitsAlreadyTestedThisRound(t *testing.T) {
 	}
 }
 
+func TestMoraleCascadeSkipsUnitsWithShootingMoraleThisRound(t *testing.T) {
+	engine := NewEngine(29)
+	g := &Game{
+		Round:      1,
+		RandomSeed: 29,
+		Battlemap:  Battlemaps()[0],
+		ActionHistory: []ActionRecord{
+			{
+				Round: 1,
+				Result: map[string]any{
+					"shooting": ShootResult{
+						MoraleTests: []MoraleTestResult{{UnitID: "u2", Passed: true}},
+					},
+				},
+			},
+		},
+	}
+	broken := oneMiniUnit("u1", 1, 100, 100, 0)
+	broken.Broken = true
+	broken.Placed = false
+	alreadyTested := oneMiniUnit("u2", 1, 125, 100, 0)
+	alreadyTested.Stats.A = 11
+	alreadyTested.Disordered = true
+	notYetTested := oneMiniUnit("u3", 1, 150, 100, 0)
+	notYetTested.Stats.A = 11
+	notYetTested.Disordered = true
+	g.Units = []Unit{broken, alreadyTested, notYetTested}
+
+	cascade := engine.resolveBrokenCascade(g, "u1", moraleTestedThisRound(g))
+
+	if len(cascade) != 1 || cascade[0].UnitID != "u3" {
+		t.Fatalf("cascade got %+v, want only not-yet-tested u3", cascade)
+	}
+	if g.Units[1].Broken || !g.Units[2].Broken {
+		t.Fatalf("wrong cascade state: already=%+v notYet=%+v", g.Units[1], g.Units[2])
+	}
+}
+
 func TestActivationCombatMoraleTestedOnceAcrossEngagements(t *testing.T) {
 	engine := NewEngine(29)
 	attacker := oneMiniUnit("u1", 1, 100, 100, 0)
@@ -1445,6 +1483,151 @@ func TestLegalActionsDoesNotExposeWheel(t *testing.T) {
 	}
 }
 
+func TestLegalActionsExposeShootOnlyWithLegalTarget(t *testing.T) {
+	g := shootingTestGame(t, UnitSetup{
+		BaseWidthMM: 25, BaseDepthMM: 25, Count: 5,
+		Stats:     UnitStats{A: 6, D: 8, CD: 1, H: 1},
+		Equipment: []string{"Bow"},
+	}, UnitSetup{
+		BaseWidthMM: 25, BaseDepthMM: 25, Count: 5,
+		Stats: UnitStats{A: 5, D: 8, CD: 1, H: 1},
+	})
+	if !containsString(LegalActions(g), ActionShoot) {
+		t.Fatalf("legal actions = %v, want shoot", LegalActions(g))
+	}
+	details := LegalActionDetails(g)
+	var shoot LegalAction
+	for _, detail := range details {
+		if detail.Type == ActionShoot {
+			shoot = detail
+		}
+	}
+	if len(shoot.Targets) != 1 || shoot.Targets[0].UnitID != "u2" || shoot.Targets[0].Weapon != "Bow" {
+		t.Fatalf("shoot details = %+v, want one bow target", shoot)
+	}
+
+	g.Units[1].Y = 900
+	if containsString(LegalActions(g), ActionShoot) {
+		t.Fatalf("shoot should not be legal out of range, actions=%v", LegalActions(g))
+	}
+}
+
+func TestShootingWeaponAndSpecialAbilityParsing(t *testing.T) {
+	unit := Unit{Name: "Elf Ballista", Equipment: []string{"Hand Weapon"}, Special: []string{"Indirect Fire", "Shielding (1)", "Large"}}
+	weapon, rangeMM, ok := shootingWeapon(unit)
+	if !ok || weapon != "Ballista" || rangeMM != 750 {
+		t.Fatalf("weapon=%q range=%.0f ok=%v, want Ballista 750 true", weapon, rangeMM, ok)
+	}
+	for _, ability := range []string{"Indirect Fire", "Shielding", "Large"} {
+		if !hasSpecialAbility(unit, ability) {
+			t.Fatalf("expected ability %q in %+v", ability, unit.Special)
+		}
+	}
+}
+
+func TestShootingLineOfSightFrontArcAndBlocking(t *testing.T) {
+	g := shootingTestGame(t, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 1, Stats: UnitStats{A: 6, D: 8, CD: 1, H: 1}, Equipment: []string{"Bow"}}, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 1, Stats: UnitStats{A: 5, D: 8, CD: 1, H: 1}})
+	if !containsString(LegalActions(g), ActionShoot) {
+		t.Fatalf("front target should be legal, actions=%v", LegalActions(g))
+	}
+
+	g.Units[1].Y = 420
+	if containsString(LegalActions(g), ActionShoot) {
+		t.Fatalf("target behind front arc should not be legal, actions=%v", LegalActions(g))
+	}
+
+	g = shootingTestGameWithBlocker(t, nil)
+	if containsString(LegalActions(g), ActionShoot) {
+		t.Fatalf("ordinary blocker should block LOS, actions=%v", LegalActions(g))
+	}
+}
+
+func TestIndirectFireBypassesLineOfSightBlocker(t *testing.T) {
+	g := shootingTestGameWithBlocker(t, []string{"Indirect Fire"})
+	if !containsString(LegalActions(g), ActionShoot) {
+		t.Fatalf("indirect fire should bypass LOS blocker, actions=%v", LegalActions(g))
+	}
+}
+
+func TestLargeTargetIgnoresOrdinaryLineOfSightBlocker(t *testing.T) {
+	g := shootingTestGameWithBlocker(t, nil)
+	g.Units[2].Special = []string{"Large"}
+	if !containsString(LegalActions(g), ActionShoot) {
+		t.Fatalf("large target should ignore ordinary blocker, actions=%v", LegalActions(g))
+	}
+}
+
+func TestShootActionRejectsSecondShotInActivation(t *testing.T) {
+	engine := NewEngine(7)
+	g := shootingTestGame(t, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 1, Stats: UnitStats{A: 20, D: 8, CD: 1, H: 1}, Equipment: []string{"Bow"}}, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, Stats: UnitStats{A: 11, D: 1, CD: 1, H: 1}})
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionShoot, TargetUnitID: "u2"}); err != nil {
+		t.Fatal(err)
+	}
+	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 1, ShotsTaken: 1}
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionShoot, TargetUnitID: "u2"}); err == nil {
+		t.Fatal("expected second shot in same activation to be rejected")
+	}
+}
+
+func TestShootActionRejectedAfterDisorderClearingActivation(t *testing.T) {
+	engine := NewEngine(7)
+	g := shootingTestGame(t, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 1, Stats: UnitStats{A: 20, D: 8, CD: 1, H: 1}, Equipment: []string{"Bow"}}, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, Stats: UnitStats{A: 11, D: 1, CD: 1, H: 1}})
+	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, LimitedToSimpleAction: true, ActionsRemaining: 1}
+
+	if containsString(LegalActions(g), ActionShoot) {
+		t.Fatalf("shoot should not be legal after clearing disorder, actions=%v", LegalActions(g))
+	}
+	if _, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionShoot, TargetUnitID: "u2"}); err == nil {
+		t.Fatal("expected shooting after clearing disorder to be rejected")
+	}
+}
+
+func TestActivateMarksDisorderClearingActivationSimpleOnly(t *testing.T) {
+	engine := NewEngine(7)
+	g := shootingTestGame(t, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 1, Stats: UnitStats{A: 20, D: 8, CD: 1, H: 1}, Equipment: []string{"Bow"}}, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, Stats: UnitStats{A: 11, D: 1, CD: 1, H: 1}})
+	g.Phase = "awaiting_activation"
+	g.CurrentActivation = nil
+	g.Units[0].ActivationNumber = 1
+	g.Units[0].Disordered = true
+
+	if _, _, err := engine.Activate(g, ActivateRequest{PlayerID: 1, UnitID: "u1"}); err != nil {
+		t.Fatal(err)
+	}
+	if g.CurrentActivation == nil || !g.CurrentActivation.LimitedToSimpleAction {
+		t.Fatalf("activation = %+v, want limited to simple action", g.CurrentActivation)
+	}
+	if containsString(LegalActions(g), ActionShoot) {
+		t.Fatalf("shoot should not be legal after activation cleared disorder, actions=%v", LegalActions(g))
+	}
+}
+
+func TestShootingShieldingDiceReductionCasualtiesMoraleAndSnapshot(t *testing.T) {
+	engine := NewEngine(3)
+	g := shootingTestGame(t, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, Stats: UnitStats{A: 20, D: 8, CD: 1, H: 1}, Equipment: []string{"Bow"}}, UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 5, MaxHealth: 3, CurrentHealth: 3, CurrentHealthSet: true, Stats: UnitStats{A: 11, D: 1, CD: 1, H: 3}, Special: []string{"Shielding (1)"}})
+	before, err := Snapshot(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec, err := engine.ApplyAction(g, ActionRequest{PlayerID: 1, UnitID: "u1", Type: ActionShoot, TargetUnitID: "u2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := rec.Result.(map[string]any)["shooting"].(ShootResult)
+	if result.DiceCount != 4 {
+		t.Fatalf("dice = %d, want 4 after shielding reduction", result.DiceCount)
+	}
+	if len(result.Casualties) == 0 || len(result.MoraleTests) == 0 {
+		t.Fatalf("shooting result should include casualties and morale: %+v", result)
+	}
+	restored, err := Restore(before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(restored.ActionHistory) != 0 || restored.CurrentActivation == nil || restored.CurrentActivation.ShotsTaken != 0 {
+		t.Fatalf("restored snapshot = actions %d activation %+v, want pre-shot state", len(restored.ActionHistory), restored.CurrentActivation)
+	}
+}
+
 func TestNewGameSupportsMultipleUnitsPerPlayer(t *testing.T) {
 	engine := NewEngine(1)
 	g, err := engine.NewGame(Setup{
@@ -1749,6 +1932,68 @@ func finishActivation(t *testing.T, engine *Engine, g *Game, unitID string, play
 			t.Fatal(err)
 		}
 	}
+}
+
+func shootingTestGame(t *testing.T, attackerSetup, targetSetup UnitSetup) *Game {
+	t.Helper()
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{Player1: attackerSetup, Player2: targetSetup})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Phase = "activated"
+	g.ActivePlayer = 1
+	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 2}
+	g.Units[0].Placed = true
+	g.Units[0].X = 100
+	g.Units[0].Y = 300
+	g.Units[0].FacingDeg = 0
+	g.Units[1].Placed = true
+	g.Units[1].X = 100
+	g.Units[1].Y = 100
+	g.Units[1].FacingDeg = 180
+	return g
+}
+
+func shootingTestGameWithBlocker(t *testing.T, attackerSpecial []string) *Game {
+	t.Helper()
+	engine := NewEngine(1)
+	g, err := engine.NewGame(Setup{
+		Player1Units: []UnitSetup{
+			{BaseWidthMM: 25, BaseDepthMM: 25, Count: 1, Stats: UnitStats{A: 6, D: 8, CD: 1, H: 1}, Equipment: []string{"Bow"}, Special: attackerSpecial},
+			{BaseWidthMM: 100, BaseDepthMM: 50, Count: 1, Stats: UnitStats{A: 5, D: 8, CD: 1, H: 1}},
+		},
+		Player2: UnitSetup{BaseWidthMM: 25, BaseDepthMM: 25, Count: 1, Stats: UnitStats{A: 5, D: 8, CD: 1, H: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Phase = "activated"
+	g.ActivePlayer = 1
+	g.CurrentActivation = &Activation{UnitID: "u1", PlayerID: 1, Success: true, ActionsRemaining: 2}
+	g.Units[0].Placed = true
+	g.Units[0].X = 100
+	g.Units[0].Y = 300
+	g.Units[0].FacingDeg = 0
+	g.Units[1].Placed = true
+	g.Units[1].X = 0
+	g.Units[1].Y = 200
+	g.Units[1].FacingDeg = 0
+	g.Units[1].Minis[0].WidthMM = 300
+	g.Units[2].Placed = true
+	g.Units[2].X = 100
+	g.Units[2].Y = 100
+	g.Units[2].FacingDeg = 180
+	return g
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func hasCombatModifier(modifiers []CombatModifier, label string) bool {

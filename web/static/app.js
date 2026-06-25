@@ -1,6 +1,8 @@
 function createMiniswarApp() {
   return {
     game: null,
+    legalActions: [],
+    legalActionDetails: [],
     selectedUnit: "",
     selectedMini: "",
     messages: [],
@@ -117,7 +119,7 @@ function createMiniswarApp() {
       });
       if (response.ok) {
         this.newGameConfigOpen = false;
-        await this.setGame(response.game, { resetSelection: true, readOnly: false });
+        await this.setGameFromResponse(response, { resetSelection: true, readOnly: false });
       }
       this.messages = [...(response.messages || []), ...(response.errors || [])];
     },
@@ -273,7 +275,7 @@ function createMiniswarApp() {
       if (response.ok) {
         this.placementPreview = null;
         this.loadGamesOpen = false;
-        await this.setGame(response.game, { resetSelection: true, readOnly: Boolean(response.readOnly) });
+        await this.setGameFromResponse(response, { resetSelection: true, readOnly: Boolean(response.readOnly) });
         this.messages = [`Loaded game ${reference.id} at step ${this.gameStep(response.game)}.`];
         if (this.isReadOnlyGame()) this.messages.push(this.readOnlyGameMessage());
         return true;
@@ -336,7 +338,7 @@ function createMiniswarApp() {
         body: JSON.stringify({ playerId: this.game.activePlayer, unitId: unit.id }),
       });
       if (response.ok) {
-        await this.setGame(response.game);
+        await this.setGameFromResponse(response);
       }
       this.messages = [...(response.messages || []), ...(response.errors || [])];
     },
@@ -357,7 +359,7 @@ function createMiniswarApp() {
       });
       if (response.ok) {
         this.placementPreview = null;
-        await this.setGame(response.game, { resetSelection: true });
+        await this.setGameFromResponse(response, { resetSelection: true });
       }
       this.messages = [...(response.messages || []), ...(response.errors || [])];
       if (!response.ok) {
@@ -378,7 +380,22 @@ function createMiniswarApp() {
         body: JSON.stringify(payload),
       });
       if (response.ok) {
-        await this.setGame(response.game, { resetPivotAxis: true });
+        await this.setGameFromResponse(response, { resetPivotAxis: true });
+      }
+      this.messages = [...(response.messages || []), ...(response.errors || [])];
+    },
+
+    async shootTarget(targetUnitId) {
+      if (this.rejectReadOnlyAction()) return;
+      const unit = this.currentActivationUnit();
+      if (!unit || !targetUnitId) return;
+      this.clearActiveCommand();
+      const response = await this.api(`/api/games/${this.game.id}/actions`, {
+        method: "POST",
+        body: JSON.stringify({ playerId: unit.playerId, unitId: unit.id, type: "shoot", targetUnitId }),
+      });
+      if (response.ok) {
+        await this.setGameFromResponse(response, { resetPivotAxis: true });
       }
       this.messages = [...(response.messages || []), ...(response.errors || [])];
     },
@@ -398,7 +415,7 @@ function createMiniswarApp() {
         }),
       });
       if (response.ok) {
-        await this.setGame(response.game, { resetPivotAxis: true });
+        await this.setGameFromResponse(response, { resetPivotAxis: true });
       }
       this.messages = [...(response.messages || []), ...(response.errors || [])];
     },
@@ -412,7 +429,7 @@ function createMiniswarApp() {
       if (response.ok) {
         this.placementPreview = null;
         this.clearActiveCommand();
-        await this.setGame(response.game, { resetSelection: true });
+        await this.setGameFromResponse(response, { resetSelection: true });
         this.renderArena();
       }
       this.messages = [...(response.messages || []), ...(response.errors || [])];
@@ -547,6 +564,18 @@ function createMiniswarApp() {
 
     clearActiveCommand() {
       this.activeCommand = null;
+    },
+
+    legalAction(type) {
+      return (this.legalActionDetails || []).find((action) => action.type === type) || null;
+    },
+
+    canShoot() {
+      return Boolean(this.canAct() && this.legalAction("shoot")?.targets?.length);
+    },
+
+    shootTargets() {
+      return this.legalAction("shoot")?.targets || [];
     },
 
     combatChoiceLabel(choice) {
@@ -702,6 +731,12 @@ function createMiniswarApp() {
       if (!activation.success) return 1;
       if (activationRecord?.result?.wasDisordered && activationRecord?.result?.disorderCleared) return 1;
       return 2;
+    },
+
+    async setGameFromResponse(response, options = {}) {
+      this.legalActions = response.legalActions || [];
+      this.legalActionDetails = response.legalActionDetails || [];
+      await this.setGame(response.game, options);
     },
 
     async setGame(game, options = {}) {
@@ -1105,16 +1140,24 @@ function createMiniswarApp() {
       }
       const unit = this.currentActivationUnit();
       if (!unit?.placed || !this.canAct()) return;
-      const positions = this.controlRowPositions(unit, 3);
+      const hasShoot = this.canShoot();
+      const positions = this.controlRowPositions(unit, hasShoot ? 4 : 3);
       this.appendArenaControl(root, positions[0].x, positions[0].y, ">", unit.playerId, () => this.setActiveCommand("move"), "Move", this.isCommandActive("move"));
       this.appendArenaControl(root, positions[1].x, positions[1].y, "*", unit.playerId, () => this.setActiveCommand("pivot"), "Pivot", this.isCommandActive("pivot"));
-      this.appendArenaControl(root, positions[2].x, positions[2].y, "~", unit.playerId, () => void this.skipActiveUnit(), "Skip");
+      if (hasShoot) {
+        this.appendArenaControl(root, positions[2].x, positions[2].y, "x", unit.playerId, () => this.setActiveCommand("shoot"), "Shoot", this.isCommandActive("shoot"));
+      }
+      const skipPosition = positions[hasShoot ? 3 : 2];
+      this.appendArenaControl(root, skipPosition.x, skipPosition.y, "~", unit.playerId, () => void this.skipActiveUnit(), "Skip");
       if (this.activeCommand?.type === "move") {
         this.appendMoveArrow(root, unit, "forward");
         this.appendMoveArrow(root, unit, "backward");
       }
       if (this.activeCommand?.type === "pivot") {
         this.appendPivotStar(root, unit);
+      }
+      if (this.activeCommand?.type === "shoot") {
+        this.appendShootTargets(root);
       }
     },
 
@@ -1176,6 +1219,24 @@ function createMiniswarApp() {
       const star = this.svgElement("text", { x: center.x, y: center.y + size * 0.32, "text-anchor": "middle", class: "pivot-star" });
       star.textContent = "*";
       root.appendChild(star);
+    },
+
+    appendShootTargets(root) {
+      const size = this.controlSize();
+      for (const target of this.shootTargets()) {
+        const center = target.center || this.unitWorldCenter((this.game?.units || []).find((unit) => unit.id === target.unitId) || {});
+        const group = this.svgElement("g", { class: "shoot-target", "data-arena-control": `shoot-${target.unitId}`, transform: `translate(${center.x} ${center.y})` });
+        group.addEventListener("click", (event) => {
+          event.stopPropagation();
+          void this.shootTarget(target.unitId);
+        });
+        const title = `${target.weapon} ${Math.round(target.rangeMm)}mm`;
+        group.appendChild(this.svgElement("title")).textContent = title;
+        group.appendChild(this.svgElement("circle", { r: size * 0.42 }));
+        group.appendChild(this.svgElement("line", { x1: -size * 0.62, y1: 0, x2: size * 0.62, y2: 0 }));
+        group.appendChild(this.svgElement("line", { x1: 0, y1: -size * 0.62, x2: 0, y2: size * 0.62 }));
+        root.appendChild(group);
+      }
     },
 
     renderCombatChoiceOverlay(root) {

@@ -652,6 +652,23 @@ label {
   dominant-baseline: middle;
 }
 
+.shoot-target {
+  cursor: crosshair;
+}
+
+.shoot-target circle {
+  fill: rgba(247, 231, 167, 0.3);
+  stroke: #15130f;
+  stroke-width: 2.5;
+}
+
+.shoot-target line {
+  stroke: #15130f;
+  stroke-width: 3;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
 .combat-choice {
   display: grid;
   gap: 0.55rem;

@@ -8,6 +8,7 @@ const (
 	ActionMove           = "move"
 	ActionPivot          = "pivot"
 	ActionAboutFace      = "about_face"
+	ActionShoot          = "shoot"
 	ActionSkip           = "skip"
 	ActionCombatPushback = "combat_pushback"
 
@@ -66,6 +67,8 @@ type UnitSetup struct {
 	CurrentHealth    int       `json:"currentHealth,omitempty"`
 	CurrentHealthSet bool      `json:"-"`
 	Stats            UnitStats `json:"stats,omitempty"`
+	Special          []string  `json:"special,omitempty"`
+	Equipment        []string  `json:"equipment,omitempty"`
 }
 
 type UnitStats struct {
@@ -131,6 +134,8 @@ type Unit struct {
 	CurrentHealth    int       `json:"currentHealth,omitempty"`
 	CurrentHealthSet bool      `json:"-"`
 	Stats            UnitStats `json:"stats,omitempty"`
+	Special          []string  `json:"special,omitempty"`
+	Equipment        []string  `json:"equipment,omitempty"`
 	Base             BaseSize  `json:"base"`
 	ActivationNumber int       `json:"activationNumber"`
 	MovementLimitMM  int       `json:"movementLimitMm"`
@@ -219,6 +224,47 @@ type MoveResult struct {
 	Combat         *CombatRoundResult `json:"combat,omitempty"`
 }
 
+type ShootResult struct {
+	TargetUnitID  string             `json:"targetUnitId"`
+	Weapon        string             `json:"weapon"`
+	RangeMM       float64            `json:"rangeMm"`
+	RangeLimitMM  float64            `json:"rangeLimitMm"`
+	LOS           LineOfSightResult  `json:"los"`
+	DiceCount     int                `json:"diceCount"`
+	TargetNumber  int                `json:"targetNumber"`
+	Modifiers     []CombatModifier   `json:"modifiers"`
+	Rolls         []int              `json:"rolls"`
+	Hits          int                `json:"hits"`
+	Casualties    []CasualtyResult   `json:"casualties,omitempty"`
+	MoraleTests   []MoraleTestResult `json:"moraleTests,omitempty"`
+	BrokenUnits   []string           `json:"brokenUnits,omitempty"`
+	TargetRemoved bool               `json:"targetRemoved,omitempty"`
+}
+
+type LineOfSightResult struct {
+	OK              bool     `json:"ok"`
+	TargetFacing    string   `json:"targetFacing,omitempty"`
+	RequiredFigures int      `json:"requiredFigures,omitempty"`
+	VisibleFigures  int      `json:"visibleFigures,omitempty"`
+	VisibleMiniKeys []string `json:"visibleMiniKeys,omitempty"`
+	Indirect        bool     `json:"indirect,omitempty"`
+	BlockedBy       string   `json:"blockedBy,omitempty"`
+}
+
+type LegalAction struct {
+	Type    string        `json:"type"`
+	Targets []ShootTarget `json:"targets,omitempty"`
+}
+
+type ShootTarget struct {
+	UnitID       string            `json:"unitId"`
+	Weapon       string            `json:"weapon"`
+	RangeMM      float64           `json:"rangeMm"`
+	RangeLimitMM float64           `json:"rangeLimitMm"`
+	LOS          LineOfSightResult `json:"los"`
+	Center       Position          `json:"center"`
+}
+
 type CasualtyResult struct {
 	UnitID       string `json:"unitId"`
 	MiniKey      string `json:"miniKey"`
@@ -257,12 +303,14 @@ type MoraleTestResult struct {
 }
 
 type Activation struct {
-	UnitID           string `json:"unitId"`
-	PlayerID         int    `json:"playerId"`
-	Success          bool   `json:"success"`
-	ActionsRemaining int    `json:"actionsRemaining"`
-	MovesTaken       int    `json:"movesTaken"`
-	Roll             []int  `json:"roll"`
+	UnitID                string `json:"unitId"`
+	PlayerID              int    `json:"playerId"`
+	Success               bool   `json:"success"`
+	LimitedToSimpleAction bool   `json:"limitedToSimpleAction,omitempty"`
+	ActionsRemaining      int    `json:"actionsRemaining"`
+	MovesTaken            int    `json:"movesTaken"`
+	ShotsTaken            int    `json:"shotsTaken"`
+	Roll                  []int  `json:"roll"`
 }
 
 type ActionRecord struct {
@@ -290,6 +338,8 @@ type APIResponse struct {
 	Action       *ActionRecord `json:"action,omitempty"`
 	Roll         []int         `json:"roll,omitempty"`
 	LegalActions []string      `json:"legalActions,omitempty"`
+	// LegalActionDetails carries target data for actions that need structured choices, such as shooting.
+	LegalActionDetails []LegalAction `json:"legalActionDetails,omitempty"`
 	// ReadOnly marks historical step responses that clients should not mutate.
 	ReadOnly bool     `json:"readOnly,omitempty"`
 	Messages []string `json:"messages"`
@@ -331,6 +381,7 @@ type ActionRequest struct {
 	FacingDeg    int     `json:"facingDeg,omitempty"`
 	AnchorKey    string  `json:"anchorKey,omitempty"`
 	CombatChoice string  `json:"combatChoice,omitempty"`
+	TargetUnitID string  `json:"targetUnitId,omitempty"`
 }
 
 type RewindRequest struct {

@@ -36,3 +36,17 @@ fmt:
 clean:
     rm -f miniswar.sqlite /tmp/miniswar-*.sqlite
     rm -rf /tmp/miniswar-go-build
+
+IMAGE_REGISTRY := "ghcr.io"
+IMAGE_OWNER := "bkroeze"
+IMAGE_NAME := "artful-one"
+IMAGE_TAG := "latest"
+IMAGE := IMAGE_REGISTRY + "/" + IMAGE_OWNER + "/" + IMAGE_NAME + ":" + IMAGE_TAG
+
+# Build Docker image locally
+docker-build:
+    docker build -t {{IMAGE}} .
+
+# Push the Docker image to GHCR (requires `docker login ghcr.io`)
+docker-push:
+    docker push {{IMAGE}}

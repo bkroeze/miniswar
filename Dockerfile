@@ -1,5 +1,7 @@
 FROM golang:1.26-bookworm AS build
 
+LABEL service=miniswar
+
 WORKDIR /app
 
 COPY go.mod go.sum ./
@@ -9,6 +11,9 @@ COPY . .
 ARG APP_VERSION
 ARG APP_BRANCH
 ARG APP_DEFAULT_BRANCH=main
+RUN apt-get update \
+   && apt-get install -y --no-install-recommends curl \
+   && rm -rf /var/lib/apt/lists/*
 RUN APP_VERSION="${APP_VERSION:-$(cat internal/version/VERSION)}" \
 	&& CGO_ENABLED=0 go build -buildvcs=false -trimpath=false \
 		-ldflags "-X 'miniswar/internal/version.baseVersion=${APP_VERSION}' -X 'miniswar/internal/version.branchName=${APP_BRANCH}' -X 'miniswar/internal/version.defaultBranch=${APP_DEFAULT_BRANCH}'" \

@@ -4,6 +4,7 @@ addr := env_var_or_default("MINISWAR_ADDR", "127.0.0.1:8080")
 db := env_var_or_default("MINISWAR_DB", "miniswar.sqlite")
 gocache := env_var_or_default("GOCACHE", "/tmp/miniswar-go-build")
 gomodcache := env_var_or_default("GOMODCACHE", "/tmp/miniswar-go-mod")
+port := env_var_or_default("MINISWAR_PORT", "8080")
 version_pkg := "miniswar/internal/version"
 version := `cat internal/version/VERSION`
 branch := `git rev-parse --abbrev-ref HEAD 2>/dev/null || true`
@@ -39,7 +40,7 @@ clean:
 
 IMAGE_REGISTRY := "ghcr.io"
 IMAGE_OWNER := "bkroeze"
-IMAGE_NAME := "artful-one"
+IMAGE_NAME := "miniswar"
 IMAGE_TAG := "latest"
 IMAGE := IMAGE_REGISTRY + "/" + IMAGE_OWNER + "/" + IMAGE_NAME + ":" + IMAGE_TAG
 
@@ -50,3 +51,7 @@ docker-build:
 # Push the Docker image to GHCR (requires `docker login ghcr.io`)
 docker-push:
     docker push {{IMAGE}}
+
+# Run the Docker image on MINISWAR_PORT, defaulting to 8080.
+docker-run:
+    docker run --rm -p {{port}}:{{port}} {{IMAGE}} -addr 0.0.0.0:{{port}} -db /storage/miniswar.sqlite
